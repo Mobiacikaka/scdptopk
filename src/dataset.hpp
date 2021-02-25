@@ -7,49 +7,39 @@
 
 class DataSet
 {
-    friend class Party;
-    friend class Server;
-    friend class Client;
+	friend class Party;
+	friend class Server;
+	friend class Client;
 
 private:
-    void GenerateRandomDataSet(size_t n);
+	void GenerateRandomDataSet(size_t n);
 
-    void SortDataSet();
+	void SortDataSet();
 
-    std::vector<data_t> data_set;
+	std::vector<data_t> data_set;
 
-    bool sorted;
+	bool sorted;
 
 protected:
-    // This pad version is not optimized
-    void Pad(size_t k, data_t p);
+	// Get Top-K of dataset
+	void KeepTopK(size_t k);
 
-    // get the median element of the data set
-    data_t GetMedian() const;
+	// Get the size of data set
+	size_t GetSizeofDataSet() const { return data_set.size(); }
 
-    // retain only the upper half
-    void KeepUpperHalf();
-    
-    // retain only the lower half
-    void KeepLowerHalf();
+	bool IsSorted() const { return sorted; }
 
-    // Get the size of data set
-    size_t GetSizeofDataSet() const;
+	// Pack the PutSIMDINGate in the DataSet class
+	data_t operator[](size_t index) { return data_set[index]; }
 
-    // 
-    bool IsSorted() const;
+	//! Following function only for test
+	void PrintAllElement() { PrintElements(data_set); }
 
-    // Pack the PutSIMDINGate in the DataSet class
-    data_t operator[](size_t index);
+	DataSet() {}
+	~DataSet() {}
 
-    //! Following function only for test
-    void PrintAllElement();
-
-    DataSet();
-    ~DataSet();
-
-    // Use Random Function to generate random int list
-    void Init();
+	// Use Random Function to generate random int list
+	void Init();
 };
 
 #endif

@@ -3,8 +3,6 @@
 #include <abycore/aby/abyparty.h>
 
 #include "party.hpp"
-#include "server.hpp"
-#include "client.hpp"
 
 int32_t ReadTestOptions(
 	int32_t* 		argcp, 
@@ -50,20 +48,19 @@ int32_t ReadTestOptions(
 
 int main(int argc, char** argv) {
    
-    e_role role;
-    uint32_t bitlen = 32, nvals = 31, secparam = 128, nthreads = 1;
-    uint16_t port = 7766;
-    std::string address = "127.0.0.1";
-    int32_t test_op = -1;
-    e_mt_gen_alg mt_alg = MT_OT;
+	e_role role;
+	uint32_t bitlen = 32, nvals = 31, secparam = 128, nthreads = 1;
+	uint16_t port = 7766;
+	std::string address = "127.0.0.1";
+	int32_t test_op = -1;
+	e_mt_gen_alg mt_alg = MT_OT;
 
-    ReadTestOptions(&argc, &argv, &role, &bitlen, &nvals, &secparam, &address, &port, &test_op);
+	ReadTestOptions(&argc, &argv, &role, &bitlen, &nvals, &secparam, &address, &port, &test_op);
 
-    seclvl seclevel = get_sec_lvl(secparam);
+	seclvl seclevel = get_sec_lvl(secparam);
 
 	Party *party;
-	if (role == SERVER) party = new Server();
-	else party = new Client();
+	party = new Party();
 
 	party->SetParameters(role, address, port, seclevel, bitlen, nthreads, mt_alg);
 	party->Run();
