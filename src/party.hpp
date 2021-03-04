@@ -39,17 +39,20 @@ protected:
 	uint32_t nthreads;
 	e_mt_gen_alg mt_alg;
 
+	void ReadDataSet();
+
 	void Prune();
 	void MergeAndShare();
 	void SelectionProbability();
+	size_t TopOneSelection();
 	void TopKSelection();
 	uint64_t RandomDraw(uint64_t M);
 
 public:
-	Party() { data_set.Init(); }
+	Party() {}
 	~Party() {}
 
-	void SetParameters(e_role role, std::string address, uint16_t port, seclvl seclevel, uint32_t bitlen, uint32_t nthreads, e_mt_gen_alg mt_alg);
+	void Init(e_role role, std::string address, uint16_t port, seclvl seclevel, uint32_t bitlen, uint32_t nthreads, e_mt_gen_alg mt_alg);
 	void Run();
 };
 

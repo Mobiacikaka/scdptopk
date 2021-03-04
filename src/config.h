@@ -15,7 +15,7 @@
 #define concat(a, b) a ## b
 
 // Probability Selection Parameter
-const double kEPSILON = 0.1;
+const double kEPSILON = 1;
 // Top k
 const size_t kK = 4;
 

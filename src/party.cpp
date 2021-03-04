@@ -2,7 +2,7 @@
 #include <ENCRYPTO_utils/connection.h>
 #include "party.hpp"
 
-void Party::SetParameters(e_role role, std::string address, uint16_t port, seclvl seclevel, uint32_t bitlen, uint32_t nthreads, e_mt_gen_alg mt_alg)
+void Party::Init(e_role role, std::string address, uint16_t port, seclvl seclevel, uint32_t bitlen, uint32_t nthreads, e_mt_gen_alg mt_alg)
 {
 	this->role = role;
 	this->address = address;
@@ -11,6 +11,17 @@ void Party::SetParameters(e_role role, std::string address, uint16_t port, seclv
 	this->bitlen = bitlen;
 	this->nthreads = nthreads;
 	this->mt_alg = mt_alg;
+
+	this->ReadDataSet();
+}
+
+void Party::ReadDataSet()
+{
+	std::string filename;
+	if(role == SERVER) filename = "../server.txt";
+	else filename = "../client.txt";
+
+	this->data_set.Init(filename);
 }
 
 void Party::Run()
@@ -23,7 +34,6 @@ void Party::Run()
 	this->MergeAndShare();
 	PrintElements(this->shr_data_set);
 
-	this->SelectionProbability();
 	this->TopKSelection();
 }
 
@@ -102,7 +112,7 @@ void Party::MergeAndShare()
 		delete shr_out[i];
 	free(shr_out);
 
-	reverse(shr_data_set.begin(), shr_data_set.end());
+	// reverse(shr_data_set.begin(), shr_data_set.end());
 }
 
 void Party::SelectionProbability()
@@ -111,24 +121,31 @@ void Party::SelectionProbability()
 	shr_gap.resize(length);
 	shr_mass.resize(length);
 
-	shr_gap[0] = role == SERVER ? 0 : 1;
-	for(size_t i = 1; i < length; i ++) 
-		shr_gap[i] = static_cast<int>(shr_data_set[i-1] - shr_data_set[i]);
+	// shr_gap[0] = role == SERVER ? 0 : 1;
+	// for(size_t i = 1; i < length; i ++) 
+	// 	shr_gap[i] = static_cast<int>(shr_data_set[i] - shr_data_set[i-1]);
+
+	size_t mpos(length / 2);
+	for(size_t i = 1; i < mpos; i ++)
+		shr_gap[i] = static_cast<int>(shr_data_set[i] - shr_data_set[i-1]);
+	// shr_gap[mpos - 1] = this->role == SERVER ? 0 : 1;
+	for(size_t i = mpos; i < length; i ++)
+		shr_gap[i] = static_cast<int>(shr_data_set[i] - shr_data_set[i+1]);
 
 	// compute other utility
 	int utility;
 	double weight, shift;
 	for (size_t i = 0; i < length; i++)
 	{
-		utility = -i;
+		utility = i < mpos ? i - mpos + 1 : mpos - i;
 		weight = exp(kEPSILON * utility);
-		std::clog << weight << std::endl;
+		// std::clog << weight << std::endl;
 		shift = i > 0 ? shr_mass[i - 1] : 0;
 		shr_mass[i] = shift + weight * shr_gap[i];
 	}
 }
 
-void Party::TopKSelection()
+size_t Party::TopOneSelection()
 {
 	uint64_t R = this->generate_R();
 	uint64_t r = this->RandomDraw(R + 1);
@@ -150,7 +167,7 @@ void Party::TopKSelection()
 		tmp_srv = PutINGate(bcirc, this->bitlen, SERVER, shr_data_set[i]);
 		tmp_cli = PutINGate(bcirc, this->bitlen, CLIENT, shr_data_set[i]);
 		shr_cmb_dataset[i] = bcirc->PutADDGate(tmp_srv, tmp_cli);
-		bcirc->PutPrintValueGate(shr_cmb_dataset[i], "dataset");
+		// bcirc->PutPrintValueGate(shr_cmb_dataset[i], "dataset");
 		delete tmp_srv, tmp_cli;
 	}
 
@@ -160,7 +177,7 @@ void Party::TopKSelection()
 		tmp_srv = PutINGate(bcirc, bitlen, SERVER, (inputtype)this->shr_gap[i]);
 		tmp_cli = PutINGate(bcirc, bitlen, CLIENT, (inputtype)this->shr_gap[i]);
 		shr_cmb_gap[i] = bcirc->PutADDGate(tmp_srv, tmp_cli);
-		bcirc->PutPrintValueGate(shr_cmb_gap[i], "gap");
+		// bcirc->PutPrintValueGate(shr_cmb_gap[i], "gap");
 		delete tmp_srv, tmp_cli;
 	}
 
@@ -170,7 +187,7 @@ void Party::TopKSelection()
 		tmp_srv = PutINGate(bcirc, bitlen, SERVER, (inputtype)this->shr_mass[i]);
 		tmp_cli = PutINGate(bcirc, bitlen, CLIENT, (inputtype)this->shr_mass[i]);
 		shr_cmb_mass[i] = bcirc->PutADDGate(tmp_srv, tmp_cli);
-		bcirc->PutPrintValueGate(shr_cmb_mass[i], "mass");
+		// bcirc->PutPrintValueGate(shr_cmb_mass[i], "mass");
 		delete tmp_srv, tmp_cli;
 	}
 
@@ -197,7 +214,7 @@ void Party::TopKSelection()
 		shr_sel[i] = bcirc->PutANDGate(shr_inv, shr_cond1[i]);
 		shr_new = bcirc->PutORGate(shr_prev, shr_sel[i]);
 		shr_prev = shr_new;
-		bcirc->PutPrintValueGate(shr_sel[i], "selection");
+		// bcirc->PutPrintValueGate(shr_sel[i], "selection");
 	}
 
 	share *shr_zero = bcirc->PutCONSGate(0UL, bitlen);
@@ -247,16 +264,38 @@ void Party::TopKSelection()
 	{
 		std::clog << "Computation Result:" << std::endl;
 		std::clog << d << std::endl;
-		return ;
+		std::cout << d << std::endl;
 	}
 	else
 	{
 		std::clog << "Computation Result:" << std::endl;
 		std::clog << d << std::endl;
-		return ;
+		std::cout << d << std::endl;
 	}
 
-	std::cerr << "party execute error" << std::endl;
+	return j;
+}
+
+void Party::TopKSelection()
+{
+	std::vector<data_t> ori_shr_data_set(this->shr_data_set);
+	this->shr_data_set.insert(this->shr_data_set.end(), ori_shr_data_set.begin(), ori_shr_data_set.end());
+	std::reverse(this->shr_data_set.begin() + ori_shr_data_set.size(), this->shr_data_set.end());
+
+	for (size_t i = 0; i < kK; i ++)
+	{
+		this->SelectionProbability();
+		size_t sel = this->TopOneSelection();
+		sel = sel < this->shr_data_set.size()/2 ? sel : this->shr_data_set.size() - sel - 1;
+		size_t sel2 = this->shr_data_set.size() - sel - 1;
+
+		shr_data_set.erase(this->shr_data_set.begin() + sel);
+		shr_data_set.erase(this->shr_data_set.begin() + sel2 - 1);
+		shr_gap.erase(this->shr_gap.begin() + sel);
+		shr_gap.erase(this->shr_gap.begin() + sel2 - 1);
+		shr_mass.erase(this->shr_mass.begin() + sel);
+		shr_mass.erase(this->shr_mass.begin() + sel2 - 1);
+	}
 }
 
 uint64_t Party::RandomDraw(uint64_t M)

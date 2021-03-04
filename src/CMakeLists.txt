@@ -6,8 +6,8 @@ add_executable(scdptopk main.cpp)
 target_link_libraries(
 	scdptopk
 
-	dataset
 	party
+	dataset
 
 	aby 
 	otextension

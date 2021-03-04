@@ -47,7 +47,6 @@ int32_t ReadTestOptions(
 }
 
 int main(int argc, char** argv) {
-   
 	e_role role;
 	uint32_t bitlen = 32, nvals = 31, secparam = 128, nthreads = 1;
 	uint16_t port = 7766;
@@ -59,10 +58,12 @@ int main(int argc, char** argv) {
 
 	seclvl seclevel = get_sec_lvl(secparam);
 
+	std::srand(time(NULL));
+
 	Party *party;
 	party = new Party();
 
-	party->SetParameters(role, address, port, seclevel, bitlen, nthreads, mt_alg);
+	party->Init(role, address, port, seclevel, bitlen, nthreads, mt_alg);
 	party->Run();
 
 	return 0;

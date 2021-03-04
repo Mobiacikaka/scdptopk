@@ -8,12 +8,11 @@
 class DataSet
 {
 	friend class Party;
-	friend class Server;
-	friend class Client;
 
 private:
-	void GenerateRandomDataSet(size_t n);
+	void GenerateRandomDataSet();
 
+	void ReadDataSet(std::string filename);
 	void SortDataSet();
 
 	std::vector<data_t> data_set;
@@ -38,8 +37,7 @@ protected:
 	DataSet() {}
 	~DataSet() {}
 
-	// Use Random Function to generate random int list
-	void Init();
+	void Init(std::string filename);
 };
 
 #endif
