@@ -29,10 +29,10 @@ void Party::Run()
 	this->Prune();
 	std::clog << "Pruning Finished Successfully!" << std::endl;
 
-	this->data_set.PrintAllElement();
+	// this->data_set.PrintAllElement();
 
 	this->MergeAndShare();
-	PrintElements(this->shr_data_set);
+	// PrintElements(this->shr_data_set);
 
 	this->TopKSelection();
 }
@@ -264,13 +264,13 @@ size_t Party::TopOneSelection()
 	{
 		std::clog << "Computation Result:" << std::endl;
 		std::clog << d << std::endl;
-		std::cout << d << std::endl;
+		std::cout << d << " ";
 	}
 	else
 	{
 		std::clog << "Computation Result:" << std::endl;
 		std::clog << d << std::endl;
-		std::cout << d << std::endl;
+		std::cout << d << " ";
 	}
 
 	return j;
@@ -296,6 +296,8 @@ void Party::TopKSelection()
 		shr_mass.erase(this->shr_mass.begin() + sel);
 		shr_mass.erase(this->shr_mass.begin() + sel2 - 1);
 	}
+
+	std::cout << std::endl;
 }
 
 uint64_t Party::RandomDraw(uint64_t M)
