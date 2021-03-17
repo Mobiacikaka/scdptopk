@@ -28,7 +28,7 @@ void DataSet::Init(std::string filename)
 void DataSet::ReadDataSet(std::string filename)
 {
 	std::ifstream file(filename);
-	data_t tmp;
+	node tmp;
 	while(file >> tmp)
 	{
 		data_set.push_back(tmp);

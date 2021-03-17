@@ -29,7 +29,7 @@ void Party::Run()
 	this->Prune();
 	std::clog << "Pruning Finished Successfully!" << std::endl;
 
-	// this->data_set.PrintAllElement();
+	this->data_set.PrintAllElement();
 
 	this->MergeAndShare();
 	// PrintElements(this->shr_data_set);
@@ -259,6 +259,12 @@ size_t Party::TopOneSelection()
 
 	std::clog << "d: " << d << ", g: " << g << ", j: " << j << std::endl;
 
+	if(d > mask)
+	{
+		// this->data_set.PrintAllElement();
+		// PrintElements(this->shr_data_set);
+	}
+
 	// uint64_t x = this->RandomDraw(g);
 	if (j < length / 2 - 1)
 	{
@@ -272,6 +278,15 @@ size_t Party::TopOneSelection()
 		std::clog << d << std::endl;
 		std::cout << d << " ";
 	}
+
+	delete party;
+	free(shr_cmb_dataset);
+	free(shr_cmb_gap);
+	free(shr_cmb_mass);
+	free(shr_no);
+	free(shr_cond1);
+	free(shr_sel);
+	free(shr_mask);
 
 	return j;
 }

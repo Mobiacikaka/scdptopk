@@ -4,6 +4,14 @@
 #include <vector>
 
 #include "config.h"
+#include "node.hpp"
+
+template <typename T>
+static inline void PrintElements(std::vector<T> &v)
+{
+	for (auto it = v.begin(); it < v.end(); it++)
+		std::cout << *it << std::endl;
+}
 
 class DataSet
 {
@@ -15,7 +23,8 @@ private:
 	void ReadDataSet(std::string filename);
 	void SortDataSet();
 
-	std::vector<data_t> data_set;
+	// std::vector<data_t> data_set;
+	std::vector<node> data_set;
 
 	bool sorted;
 
@@ -29,7 +38,7 @@ protected:
 	bool IsSorted() const { return sorted; }
 
 	// Pack the PutSIMDINGate in the DataSet class
-	data_t operator[](size_t index) { return data_set[index]; }
+	data_t operator[](size_t index) { return data_set[index].payment; }
 
 	//! Following function only for test
 	void PrintAllElement() { PrintElements(data_set); }

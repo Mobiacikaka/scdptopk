@@ -1,3 +1,4 @@
+add_library(node node.cpp)
 add_library(dataset dataset.cpp)
 add_library(party party.cpp)
 
@@ -8,6 +9,7 @@ target_link_libraries(
 
 	party
 	dataset
+	node
 
 	aby 
 	otextension
