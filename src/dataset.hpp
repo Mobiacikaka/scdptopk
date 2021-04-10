@@ -2,51 +2,41 @@
 #define __DATASET_HPP__
 
 #include <vector>
+#include <string>
+#include <bloom.h>
 
-#include "config.h"
-#include "node.hpp"
-
-template <typename T>
-static inline void PrintElements(std::vector<T> &v)
+typedef struct KV_type
 {
-	for (auto it = v.begin(); it < v.end(); it++)
-		std::cout << *it << std::endl;
-}
+	std::string ID;
+	int count;
 
-class DataSet
+	KV_type(std::string ID, int count)
+	{
+		this->ID = ID;
+		this->count = count;
+	}
+
+	~KV_type() {}
+
+	bool operator<(struct KV_type& kv2)
+	{
+		return this->count < kv2.count;
+	}
+
+} KV_type;
+
+class Dataset
 {
-	friend class Party;
-
 private:
-	void GenerateRandomDataSet();
+	std::vector<KV_type> content;
 
-	void ReadDataSet(std::string filename);
-	void SortDataSet();
+public:
+	Dataset() {}
+	~Dataset() {}
 
-	// std::vector<data_t> data_set;
-	std::vector<node> data_set;
-
-	bool sorted;
-
-protected:
-	// Get Top-K of dataset
-	void KeepTopK(size_t k);
-
-	// Get the size of data set
-	size_t GetSizeofDataSet() const { return data_set.size(); }
-
-	bool IsSorted() const { return sorted; }
-
-	// Pack the PutSIMDINGate in the DataSet class
-	data_t operator[](size_t index) { return data_set[index].payment; }
-
-	//! Following function only for test
-	void PrintAllElement() { PrintElements(data_set); }
-
-	DataSet() {}
-	~DataSet() {}
-
-	void Init(std::string filename);
+	void ReadDataset();
+	void SortDataset();
+	struct bloom * BloomPack(int k);
 };
 
 #endif
