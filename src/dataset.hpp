@@ -36,7 +36,9 @@ public:
 
 	void ReadDataset();
 	void SortDataset();
-	struct bloom * BloomPack(int k);
+
+	struct bloom * BloomPack(size_t k);
+	size_t BloomCheck(struct bloom * blm, size_t k);
 };
 
 #endif
