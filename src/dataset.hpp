@@ -16,6 +16,12 @@ typedef struct KV_type
 		this->count = count;
 	}
 
+	KV_type(const struct KV_type & t)
+	{
+		this->ID = t.ID;
+		this->count = t.count;
+	}
+
 	~KV_type() {}
 
 	bool operator<(struct KV_type& kv2)
@@ -36,9 +42,13 @@ public:
 
 	void ReadDataset();
 	void SortDataset();
+	void Prune(size_t s);
 
 	struct bloom * BloomPack(size_t k);
 	size_t BloomCheck(struct bloom * blm, size_t k);
+	size_t size() { return content.size(); }
+	KV_type & operator[](size_t i) { return content[i]; }
+	void erase(size_t i) { content.erase(content.begin()+i); }
 };
 
 #endif

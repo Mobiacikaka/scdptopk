@@ -22,7 +22,7 @@ void Dataset::ReadDataset()
 
 void Dataset::SortDataset()
 {
-	sort(content.begin(), content.end());
+	sort(content.rbegin(), content.rend());
 }
 
 /**
@@ -56,4 +56,9 @@ size_t Dataset::BloomCheck(struct bloom * blm, size_t k)
 	}
 
 	return count;
+}
+
+void Dataset::Prune(size_t s)
+{
+	content.erase(content.begin()+s, content.end());
 }
