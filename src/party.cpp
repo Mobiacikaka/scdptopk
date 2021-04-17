@@ -5,6 +5,8 @@
 #include <iostream>
 #include <ENCRYPTO_utils/socket.h>
 #include <ENCRYPTO_utils/connection.h>
+#include <abycore/circuit/booleancircuits.h>
+#include <abycore/sharing/sharing.h>
 #include <cryptopp/md5.h>
 #include <cryptopp/files.h>
 #include <cryptopp/filters.h>
@@ -193,4 +195,60 @@ void Party::Merge()
 	}
 
 	tsocket->Close();
+}
+
+void Party::Sort()
+{
+	for(size_t i = 1; i < shr_dataset.size(); i ++)
+	{
+		size_t j = i-1;
+		while(j >= 0)
+		{
+			bool flag(false);
+
+			{
+				ABYParty * party = new ABYParty(role, address, port, seclevel, bitlen, nthreads, mt_alg, 4000000);
+				vector<Sharing*> sharings = party->GetSharings();
+				BooleanCircuit * bcirc = (BooleanCircuit *) sharings[S_YAO]->GetCircuitBuildRoutine();
+
+				share *srv_i, *cli_i, *srv_j, *cli_j;
+				if(role == SERVER)
+				{
+					srv_i = bcirc->PutINGate(static_cast<uint32_t>(shr_dataset[i].count), bitlen, role);
+					srv_j = bcirc->PutINGate(static_cast<uint32_t>(shr_dataset[j].count), bitlen, role);
+					cli_i = bcirc->PutDummyINGate(bitlen);
+					cli_j = bcirc->PutDummyINGate(bitlen);
+				}
+				else
+				{
+					srv_i = bcirc->PutDummyINGate(bitlen);
+					srv_j = bcirc->PutDummyINGate(bitlen);
+					cli_i = bcirc->PutINGate(static_cast<uint32_t>(shr_dataset[i].count), bitlen, role);
+					cli_j = bcirc->PutINGate(static_cast<uint32_t>(shr_dataset[j].count), bitlen, role);
+				}
+
+				share *cmb_i, *cmb_j, *shr_cmp, *shr_out;
+				cmb_i = bcirc->PutADDGate(srv_i, cli_i);
+				cmb_j = bcirc->PutADDGate(srv_j, cli_j);
+				shr_cmp = bcirc->PutGTGate(cmb_i, cmb_j);
+				shr_out = bcirc->PutOUTGate(shr_cmp, ALL);
+
+				party->ExecCircuit();
+
+				uint32_t output = shr_out->get_clear_value<uint32_t>();
+				flag = output;
+
+				delete party;
+				delete srv_i, cli_i, srv_j, cli_j;
+				delete cmb_i, cmb_j, shr_cmp, shr_out;
+			}
+
+			if(flag == true)
+			{
+				KV_type tmp = shr_dataset[i];
+				shr_dataset[i] = shr_dataset[j];
+				shr_dataset[j] = tmp;
+			}
+		}
+	}
 }
