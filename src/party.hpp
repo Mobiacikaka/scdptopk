@@ -23,14 +23,19 @@ private:
 		e_mt_gen_alg mt_alg;
 	};
 
-	int func1(KV_type & element, CSocket * tsocket);
-	int func2(CSocket * tsocket);
-	// share * BuildCompareCircuit(BooleanCircuit * bcirc, share * srv_i, share * srv_j, share * cli_i, share * cli_j);
+	int MakeShareSrv(KV_type & element, CSocket * tsocket);
+	int MakeShareCli(CSocket * tsocket);
+
+	double get_delta_q(double delta, size_t kbar, double c);
+	double get_T(double delta_q, double eps1, double eps2);
+	double get_qi(size_t i, double eps2);
+	vector<size_t> random_draw_output(double eps_em);
 
 protected:
 	void Prune();
 	void Merge();
 	void Sort();
+	vector<size_t> Selection( const size_t k, const size_t kbar, const double epsilon, const double p1, const double eps_em, const double delta);
 
 public:
 	Party() {}
