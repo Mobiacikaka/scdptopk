@@ -2,11 +2,17 @@
 
 #include <algorithm>
 #include <fstream>
+#include <iostream>
 using namespace std;
 
 void Dataset::ReadDataset()
 {
 	ifstream file("dataset.txt");
+
+	if(file.is_open() == false) {
+		cerr << "dataset.txt open error!" << endl;
+		exit(1);
+	} 
 
 	string str;
 	int cnt;
@@ -61,4 +67,21 @@ size_t Dataset::BloomCheck(struct bloom * blm, size_t k)
 void Dataset::Prune(size_t s)
 {
 	content.erase(content.begin()+s, content.end());
+}
+
+void Dataset::print(std::string filename)
+{
+	ofstream file(filename);
+	if(!file.is_open()) {
+		cerr << filename << " open error!" << endl;
+		exit(1);
+	}
+
+	file << "ID\tCount\n";
+	for(size_t i = 0; i < this->content.size(); i ++)
+	{
+		file << content[i].ID << "\t" << content[i].count << endl;
+	}
+
+	file.close();
 }

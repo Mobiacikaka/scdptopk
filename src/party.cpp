@@ -1,3 +1,5 @@
+#define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
+
 #include "party.hpp"
 
 #include <cassert>
@@ -16,9 +18,25 @@
 
 using namespace std;
 
+void Party::set_param(e_role role, std::string address, uint16_t port, seclvl seclevel, uint32_t bitlen, uint32_t nthreads, e_mt_gen_alg mt_alg)
+{
+	this->role = role;
+	this->address = address;
+	this->port = port;
+	this->seclevel = seclevel;
+	this->bitlen = bitlen;
+	this->nthreads = nthreads;
+	this->mt_alg = mt_alg;
+}
+
 void Party::Run()
 {
+	datatset.ReadDataset();
+	datatset.SortDataset();
+
 	this->Prune();
+	datatset.print("Prune.out");
+
 }
 
 const size_t k = 50;
@@ -138,7 +156,7 @@ int Party::MakeShareCli(CSocket * tsocket)
 	}
 	
 	int shr_rnd = rand();
-	tsocket->Send((void *)shr_rnd, sizeof(shr_rnd));
+	tsocket->Send((void *)&shr_rnd, sizeof(shr_rnd));
 
 	if(i < datatset.size())
 	{
@@ -457,7 +475,6 @@ vector<size_t> Party::random_draw_output(double eps_em)
 
 vector<size_t> Party::Selection(const size_t k, const size_t kbar, const double epsilon, const double p1, const double eps_em, const double delta)
 {
-	size_t k, kbar;
 	double eps1, eps2;
 	double c;
 	double delta_q;

@@ -49,6 +49,7 @@ public:
 	size_t size() { return content.size(); }
 	KV_type & operator[](size_t i) { return content[i]; }
 	void erase(size_t i) { content.erase(content.begin()+i); }
+	void print(std::string filename);
 };
 
 #endif

@@ -4,24 +4,25 @@
 #include "dataset.hpp"
 #include <abycore/aby/abyparty.h>
 #include <string>
+#include <vector>
 
 class Party
 {
 private:
 	Dataset datatset;
 	size_t nr_interset;
-	vector<KV_type> shr_dataset;
+	std::vector<KV_type> shr_dataset;
 
 	struct /* ABYParty Parameters */
 	{
 		e_role role;
-		std::string address;
 		uint16_t port;
 		seclvl seclevel;
 		uint32_t bitlen;
 		uint32_t nthreads;
 		e_mt_gen_alg mt_alg;
 	};
+	std::string address;
 
 	int MakeShareSrv(KV_type & element, CSocket * tsocket);
 	int MakeShareCli(CSocket * tsocket);
@@ -29,18 +30,19 @@ private:
 	double get_delta_q(double delta, size_t kbar, double c);
 	double get_T(double delta_q, double eps1, double eps2);
 	double get_qi(size_t i, double eps2);
-	vector<size_t> random_draw_output(double eps_em);
+	std::vector<size_t> random_draw_output(double eps_em);
 
 protected:
 	void Prune();
 	void Merge();
 	void Sort();
-	vector<size_t> Selection( const size_t k, const size_t kbar, const double epsilon, const double p1, const double eps_em, const double delta);
+	std::vector<size_t> Selection( const size_t k, const size_t kbar, const double epsilon, const double p1, const double eps_em, const double delta);
 
 public:
 	Party() {}
 	~Party() {}
 
+	void set_param(e_role role, std::string address, uint16_t port, seclvl seclevel, uint32_t bitlen, uint32_t nthreads, e_mt_gen_alg mt_alg);
 	void Run();
 
 };
