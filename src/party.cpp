@@ -385,92 +385,222 @@ double Party::get_qi(size_t i, double eps2)
 	return qi_n;
 }
 
+double Party::generate_R(double mass)
+{
+	double mass2;
+
+	unique_ptr<CSocket> tsocket;
+	if(role == SERVER) {
+		tsocket = Listen(address, port);
+		if(!tsocket) {
+			cerr << "Listen Failed" << endl;
+			exit(1);
+		}
+
+		tsocket->Send((void*)&mass, sizeof(mass));
+		tsocket->Receive((void *)&mass2, sizeof(mass2));
+	}
+	else {
+		tsocket = Connect(address, port);
+		if(!tsocket) {
+			cerr << "Connect Failed" << endl;
+			exit(1);
+		}
+
+		tsocket->Receive((void *)&mass2, sizeof(mass2));
+		tsocket->Send((void *)&mass, sizeof(mass));
+	}
+
+	tsocket->Close();
+	return mass + mass2;
+}
+
+uint64_t Party::RandomDraw(double mass)
+{
+	double R = generate_R(mass);
+	uint64_t M = (uint64_t)R;
+	uint64_t mask = 0;
+
+	for(size_t i = 63; i >=0; i --) {
+		if(M >> i) {
+			mask = (1 << ++i) - 1;
+			break;
+		}
+	}
+
+	unique_ptr<CSocket> tsocket;
+	uint64_t xrnd;
+	if(role == SERVER) {
+		tsocket = Listen(address, role);
+		if(!tsocket) {
+			cerr << "Listen Failed" << endl;
+			exit(1);
+		}
+
+		while(true) {
+			uint64_t rnd1 = rand();
+			uint64_t rnd2 = rand();
+			xrnd = rnd1 ^ rnd2;
+			xrnd &= mask;
+			
+			if(xrnd < M) break;
+		}
+		
+		tsocket->Send((void *)&xrnd, sizeof(xrnd));
+	}
+	else {
+		tsocket = Connect(address, role);
+		if(!tsocket) {
+			cerr << "Connect Failed" << endl;
+			exit(1);
+		}
+
+		tsocket->Receive((void *)&xrnd, sizeof(xrnd));
+	}
+	tsocket->Close();
+
+	return xrnd;
+}
+
+/*
+size_t Party::Top1Selection()
+{
+	uint64_t r = RandomDraw();
+
+	ABYParty * party = new ABYParty(role, address, port, seclevel, bitlen, nthreads, mt_alg, 4000000);
+	vector<Sharing*> & sharings = party->GetSharings();
+	BooleanCircuit * bcirc = (BooleanCircuit*)sharings[S_BOOL]->GetCircuitBuildRoutine();
+
+	for(size_t i = 0; i < shr_dataset.size(); )
+}
+*/
+
+template<class T>
+void Party::erase(vector<T> v, size_t i)
+{
+	size_t len = v.size();
+	v.erase(v.begin() + i);
+	if(i >= len/2)
+		v.erase(v.end() - i);
+	else 
+		v.erase(v.end() - i - 1);
+}
+
 vector<size_t> Party::random_draw_output(double eps_em)
 {
-	const int nrolls = shr_dataset.size() * 10;
+	// Selection Probability Calculate
+	vector<int> shr_dataset;
+	vector<int> gap;
+	vector<double> mass;
+	vector<size_t> nr;
 
-	default_random_engine generator;
-	vector<uint32_t> pos;
-	vector<uint32_t> count;
+	shr_dataset.resize(this->shr_dataset.size() * 2);
+	size_t length(shr_dataset.size());
+	for(size_t i = 0; i < this->shr_dataset.size(); i ++)
+		shr_dataset[i] = this->shr_dataset[i].count;
+	for(size_t i = length; i < length * 2; i ++)
+		shr_dataset[i] = shr_dataset[2*length - i - 1];
 
-	count.resize(shr_dataset.size());
-	for(size_t i = 0; i < shr_dataset.size(); i ++) 
-		count[i] = static_cast<uint32_t>(shr_dataset[i].count);
+	gap.resize(length);
+	mass.resize(length);
 
-	discrete_distribution<size_t> distribution(count.begin(), count.end());
+	for(size_t i = 0; i < length / 2; i ++)
+		nr[i] = nr[length - i - 1] = i;
 
-	for(size_t i = 0; i < nrolls; i ++) {
-		size_t number = distribution(generator);
-		pos[number] ++;
+	size_t middle(length / 2);
+	for(size_t i = 0; i < length; i ++)
+	{
+		if(i == 0)
+			gap[i] = static_cast<int>(shr_dataset[i] - 0);
+		else if(i < middle)
+			gap[i] = static_cast<int>(shr_dataset[i] - shr_dataset[i-1]);
+		else if(i < length - 1)
+			gap[i] = static_cast<int>(shr_dataset[i] - shr_dataset[i+1]);
+		else
+			gap[i] = static_cast<int>(shr_dataset[i]);
+
+		int utility = i < middle ? i - middle + 1 : middle - i;
+		double weight = exp(eps_em * utility);
+		double shift = i > 0 ? mass[i - 1] : 0;
+		mass[i] = shift + weight * gap[i];
 	}
 
-	// sort
-	vector<size_t> loc;
-	for(size_t i = 0; i < shr_dataset.size(); i ++)
+	// Top K Selection
+	vector<size_t> output;
+	uint64_t r = RandomDraw(mass[length - 1]);
+	for(size_t i = 0; i < k; i ++)
 	{
-		loc[i] = i;
-	}
-
-	for(size_t i = 1; i < pos.size(); i ++)
-	{
-		size_t j = i-1;
-		while(j >= 0)
+		int j = -1;
+		for(size_t i = 0; i < shr_dataset.size(); i ++)
 		{
-			bool flag(false);
+			ABYParty * party = new ABYParty(role, address, port, seclevel, bitlen, nthreads, mt_alg, 4000000);
+			vector<Sharing*> & sharings = party->GetSharings();
+			BooleanCircuit * bcirc = (BooleanCircuit*)sharings[S_BOOL]->GetCircuitBuildRoutine();
 
-			{
-				ABYParty * party = new ABYParty(role, address, port, seclevel, bitlen, nthreads, mt_alg, 4000000);
-				vector<Sharing*> sharings = party->GetSharings();
-				BooleanCircuit * bcirc = (BooleanCircuit *) sharings[S_YAO]->GetCircuitBuildRoutine();
-
-				share *srv_i, *cli_i, *srv_j, *cli_j;
-				if(role == SERVER)
-				{
-					srv_i = bcirc->PutINGate(pos[i], bitlen, role);
-					srv_j = bcirc->PutINGate(pos[j], bitlen, role);
-					cli_i = bcirc->PutDummyINGate(bitlen);
-					cli_j = bcirc->PutDummyINGate(bitlen);
-				}
-				else
-				{
-					srv_i = bcirc->PutDummyINGate(bitlen);
-					srv_j = bcirc->PutDummyINGate(bitlen);
-					cli_i = bcirc->PutINGate(pos[i], bitlen, role);
-					cli_j = bcirc->PutINGate(pos[j], bitlen, role);
-				}
-
-				share *cmb_i, *cmb_j, *shr_cmp, *shr_out;
-				cmb_i = bcirc->PutADDGate(srv_i, cli_i);
-				cmb_j = bcirc->PutADDGate(srv_j, cli_j);
-				shr_cmp = bcirc->PutGTGate(cmb_i, cmb_j);
-				shr_out = bcirc->PutOUTGate(shr_cmp, ALL);
-
-				party->ExecCircuit();
-
-				uint32_t output = shr_out->get_clear_value<uint32_t>();
-				flag = output;
-
-				delete party;
-				delete srv_i, cli_i, srv_j, cli_j;
-				delete cmb_i, cmb_j, shr_cmp, shr_out;
+			share *di_srv, *di_cli, *shr_e;
+			if(role == SERVER) {
+				di_srv = bcirc->PutINGate((uint32_t)shr_dataset[i], bitlen, role);
+				di_cli = bcirc->PutDummyINGate(bitlen);
 			}
+			else {
+				di_srv = bcirc->PutDummyINGate(bitlen);
+				di_cli = bcirc->PutINGate((uint32_t)shr_dataset[i], bitlen, role);
+			}
+			shr_e = bcirc->PutSUBGate(di_srv, di_cli);
 
-			if(flag == true)
-			{
-				uint32_t tmp = pos[i];
-				pos[i] = pos[j];
-				pos[j] = tmp;
+			share *gapi_srv, *gapi_cli, *shr_gap;
+			if(role == SERVER) {
+				gapi_srv = bcirc->PutINGate((uint32_t)gap[i], bitlen, role);
+				gapi_cli = bcirc->PutDummyINGate(bitlen);
+			}
+			else {
+				gapi_srv = bcirc->PutDummyINGate(bitlen);
+				gapi_cli = bcirc->PutINGate((uint32_t)gap[i], bitlen, role);
+			}
+			shr_gap = bcirc->PutSUBGate(gapi_srv, gapi_cli);
 
-				size_t tmploc = loc[i];
-				loc[i] = loc[j];
-				loc[j] = loc[i];
+			share *massi_srv, *massi_cli, *shr_mass;
+			if(role == SERVER) {
+				massi_srv = bcirc->PutINGate((uint64_t)mass[i], 64, role);
+				massi_cli = bcirc->PutDummyINGate(64);
+			}
+			else {
+				massi_srv = bcirc->PutDummyINGate(64);
+				massi_cli = bcirc->PutINGate((uint64_t)mass[i], 64, role);
+			}
+			shr_mass = bcirc->PutSUBGate(massi_srv, massi_cli);
+
+			share * shr_r;
+			if(role == SERVER)
+				shr_r = bcirc->PutINGate(r, 64, role);
+			else
+				shr_r = bcirc->PutDummyINGate(64);
+
+			share * shr_cmp = bcirc->PutGTGate(shr_r, shr_mass);
+
+			share *out_cmp = bcirc->PutOUTGate(shr_cmp, ALL);
+
+			party->ExecCircuit();
+
+			uint32_t cmp = out_cmp->get_clear_value<uint32_t>();
+
+			delete party;
+			delete di_srv, di_cli, shr_e;
+			delete gapi_srv, gapi_cli, shr_gap;
+			delete massi_srv, massi_cli, shr_mass;
+			delete shr_r, shr_cmp, out_cmp;
+
+			if(cmp == true) {
+				output.push_back(nr[i]);
+				erase(nr, i);
+				erase(shr_dataset, i);
+				erase(gap, i);
+				erase(mass, i);
 			}
 		}
 	}
 
-	// random draw top k
-	loc.erase(loc.begin() + k, loc.end());
-	return loc;
+	return output;
 }
 
 vector<size_t> Party::Selection(const size_t k, const size_t kbar, const double epsilon, const double p1, const double eps_em, const double delta)

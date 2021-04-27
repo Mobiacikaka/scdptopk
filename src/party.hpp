@@ -30,6 +30,11 @@ private:
 	double get_delta_q(double delta, size_t kbar, double c);
 	double get_T(double delta_q, double eps1, double eps2);
 	double get_qi(size_t i, double eps2);
+
+	template<class T>
+	void erase(std::vector<T> v, size_t i);
+	double generate_R(double mass);
+	uint64_t RandomDraw(double mass);
 	std::vector<size_t> random_draw_output(double eps_em);
 
 protected:
