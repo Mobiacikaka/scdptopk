@@ -34,6 +34,7 @@
 build
 .vscode
 test
+test2
 
 server.txt
 client.txt

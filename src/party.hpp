@@ -9,9 +9,10 @@
 class Party
 {
 private:
-	Dataset datatset;
+	Dataset dataset;
 	size_t nr_interset;
 	std::vector<KV_type> shr_dataset;
+	void print_dataset(std::string filename);
 
 	struct /* ABYParty Parameters */
 	{

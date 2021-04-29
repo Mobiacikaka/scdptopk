@@ -10,6 +10,8 @@ typedef struct KV_type
 	std::string ID;
 	int count;
 
+	KV_type() {}
+
 	KV_type(std::string ID, int count)
 	{
 		this->ID = ID;

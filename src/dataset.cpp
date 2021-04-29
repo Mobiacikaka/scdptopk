@@ -71,13 +71,19 @@ void Dataset::Prune(size_t s)
 
 void Dataset::print(std::string filename)
 {
+	if(filename.empty()) {
+		for(size_t i = 0; i < this->content.size(); i ++) {
+			cout << content[i].ID << "\t" << content[i].count << endl;
+		}
+		return;
+	}
+
 	ofstream file(filename);
 	if(!file.is_open()) {
 		cerr << filename << " open error!" << endl;
 		exit(1);
 	}
 
-	file << "ID\tCount\n";
 	for(size_t i = 0; i < this->content.size(); i ++)
 	{
 		file << content[i].ID << "\t" << content[i].count << endl;

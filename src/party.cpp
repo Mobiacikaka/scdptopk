@@ -29,17 +29,43 @@ void Party::set_param(e_role role, std::string address, uint16_t port, seclvl se
 	this->mt_alg = mt_alg;
 }
 
-void Party::Run()
+void Party::print_dataset(std::string filename)
 {
-	datatset.ReadDataset();
-	datatset.SortDataset();
+	if(filename.empty()) {
+		for(size_t i = 0; i < shr_dataset.size(); i ++)
+			cout << shr_dataset[i].ID << "\t" << shr_dataset[i].count << endl;
+		return;
+	}
 
-	this->Prune();
-	datatset.print("Prune.out");
+	ofstream file(filename);
+	if(!file.is_open()) {
+		cerr << filename << " Open Error!" << endl;
+		exit(1);
+	}
 
+	for(size_t i = 0; i < shr_dataset.size(); i ++)
+		file << shr_dataset[i].ID << "\t" << shr_dataset[i].count << endl;
 }
 
-const size_t k = 50;
+void Party::Run()
+{
+	dataset.ReadDataset();
+	dataset.SortDataset();
+
+	clog << "Ready for calculate" << endl;
+
+	this->Prune();
+	dataset.print("Prune.out");
+	clog << "Prune Finished" << endl;
+
+	this->Merge();
+	this->print_dataset("Merge.out");
+
+	this->Sort();
+	this->print_dataset("Sort.out");
+}
+
+const size_t k = 4;
 const size_t prune_times = 5;
 
 void Party::Prune()
@@ -58,9 +84,11 @@ void Party::Prune()
 
 		for(i = 0; i < prune_times; i ++)
 		{
-			blm = datatset.BloomPack(k * pow(2, i));
+			blm = dataset.BloomPack(k * pow(2, i));
 			tsocket->Send	((void *)blm, sizeof(struct bloom));
+			tsocket->Send((void *)blm->bf, blm->bytes);
 			tsocket->Receive((void *)(&nr_interset), sizeof(size_t));
+			bloom_free(blm);
 
 			if(nr_interset * 1.0 / k >= 0.9) break;
 		}
@@ -77,9 +105,13 @@ void Party::Prune()
 
 		for(i = 0; i < prune_times; i ++)
 		{
+			blm = new struct bloom;
 			tsocket->Receive((void *)blm, sizeof(struct bloom));
-			nr_interset = datatset.BloomCheck(blm, k * pow(2, i));
+			blm->bf = (unsigned char *)calloc(blm->bytes, sizeof(unsigned char));
+			tsocket->Receive((void *)blm->bf, blm->bytes);
+			nr_interset = dataset.BloomCheck(blm, k * pow(2, i));
 			tsocket->Send	((void *)(&nr_interset), sizeof(size_t));
+			bloom_free(blm);
 
 			if(nr_interset * 1.0 / k >= 0.9) break;
 		}
@@ -92,7 +124,7 @@ void Party::Prune()
 		exit(0);
 	}
 
-	datatset.Prune(k * pow(2, i));
+	dataset.Prune(k * pow(2, i-1));
 }
 
 int Party::MakeShareSrv(KV_type & element, CSocket * tsocket)
@@ -108,9 +140,7 @@ int Party::MakeShareSrv(KV_type & element, CSocket * tsocket)
 	hash.Final((byte *)&digest[0]);
 
 	string encoded;
-	StringSink tmpssnk(encoded);
-	HexEncoder tmphe(&tmpssnk);
-	StringSource tmpssrc(digest, true, &tmphe);
+	StringSource tmpssrc(digest, true, new HexEncoder(new StringSink(encoded)));
 
 	tsocket->Send((void *)encoded.c_str(), encoded.size());
 	tsocket->Receive((void *)&shr_rnd, sizeof(shr_rnd));
@@ -126,8 +156,9 @@ int Party::MakeShareCli(CSocket * tsocket)
 	string encoded;
 	string decoded;
 
-	encoded.resize(64);
+	encoded.resize(32);
 	tsocket->Receive((void *)&encoded[0], encoded.size());
+	// clog << encoded << endl;
 
 	HexDecoder decoder;
 	decoder.Put((byte *)encoded.data(), encoded.size());
@@ -142,9 +173,9 @@ int Party::MakeShareCli(CSocket * tsocket)
 	
 	// Part 2: check the local dataset and find the same one
 	size_t i;
-	for(i = 0; i < datatset.size(); i ++)
+	for(i = 0; i < dataset.size(); i ++)
 	{
-		string ID = datatset[i].ID;
+		string ID = dataset[i].ID;
 		string digest;
 		Weak1::MD5 hash;
 		
@@ -158,10 +189,10 @@ int Party::MakeShareCli(CSocket * tsocket)
 	int shr_rnd = rand();
 	tsocket->Send((void *)&shr_rnd, sizeof(shr_rnd));
 
-	if(i < datatset.size())
+	if(i < dataset.size())
 	{
-		shr_rnd += datatset[i].count;
-		datatset.erase(i);
+		shr_rnd += dataset[i].count;
+		dataset.erase(i);
 	}
 
 	return shr_rnd;
@@ -179,13 +210,13 @@ void Party::Merge()
 			exit(1);
 		}
 
-		for(size_t i = 0; i < datatset.size(); i ++)
+		for(size_t i = 0; i < dataset.size(); i ++)
 		{
-			KV_type tmp_kv(datatset[i].ID, MakeShareSrv(datatset[i], tsocket.get()));
+			KV_type tmp_kv(dataset[i].ID, MakeShareSrv(dataset[i], tsocket.get()));
 			shr_dataset.push_back(tmp_kv);
 		}
 
-		for(size_t i = 0; i < datatset.size() - nr_interset; i ++) {
+		for(size_t i = 0; i < dataset.size() - nr_interset; i ++) {
 			int rnd;
 			tsocket->Receive((void *)&rnd, sizeof(rnd));
 			KV_type tmp_kv("", rnd);
@@ -199,17 +230,17 @@ void Party::Merge()
 			exit(1);
 		}
 
-		for(size_t i = 0; i < datatset.size(); i ++)
+		for(size_t i = 0; i < dataset.size(); i ++)
 		{
 			KV_type tmp_kv("", MakeShareCli(tsocket.get()));
 			shr_dataset.push_back(tmp_kv);
 		}
 
-		for(size_t i = 0; i < datatset.size(); i ++)
+		for(size_t i = 0; i < dataset.size(); i ++)
 		{
 			int rnd = rand();
 			tsocket->Send((void *)&rnd, sizeof(rnd));
-			KV_type tmp_kv(datatset[i].ID, rnd-datatset[i].count);
+			KV_type tmp_kv(dataset[i].ID, rnd-dataset[i].count);
 			shr_dataset.push_back(tmp_kv);
 		}
 	}
@@ -221,15 +252,18 @@ void Party::Sort()
 {
 	for(size_t i = 1; i < shr_dataset.size(); i ++)
 	{
-		size_t j = i-1;
-		while(j >= 0)
+		size_t j = i;
+		while(j > 0)
 		{
 			bool flag(false);
+			size_t i = j - 1;
+			clog << j << "\t" << i << endl;
 
 			{
+
 				ABYParty * party = new ABYParty(role, address, port, seclevel, bitlen, nthreads, mt_alg, 4000000);
 				vector<Sharing*> sharings = party->GetSharings();
-				BooleanCircuit * bcirc = (BooleanCircuit *) sharings[S_YAO]->GetCircuitBuildRoutine();
+				BooleanCircuit * bcirc = (BooleanCircuit *) sharings[S_BOOL]->GetCircuitBuildRoutine();
 
 				share *srv_i, *cli_i, *srv_j, *cli_j;
 				if(role == SERVER)
@@ -250,7 +284,7 @@ void Party::Sort()
 				share *cmb_i, *cmb_j, *shr_cmp, *shr_out;
 				cmb_i = bcirc->PutSUBGate(srv_i, cli_i);
 				cmb_j = bcirc->PutSUBGate(srv_j, cli_j);
-				shr_cmp = bcirc->PutGTGate(cmb_i, cmb_j);
+				shr_cmp = bcirc->PutGTGate(cmb_j, cmb_i);
 				shr_out = bcirc->PutOUTGate(shr_cmp, ALL);
 
 				party->ExecCircuit();
@@ -269,6 +303,9 @@ void Party::Sort()
 				shr_dataset[i] = shr_dataset[j];
 				shr_dataset[j] = tmp;
 			}
+			else break;
+
+			j --;
 		}
 	}
 }
@@ -461,19 +498,6 @@ uint64_t Party::RandomDraw(double mass)
 
 	return xrnd;
 }
-
-/*
-size_t Party::Top1Selection()
-{
-	uint64_t r = RandomDraw();
-
-	ABYParty * party = new ABYParty(role, address, port, seclevel, bitlen, nthreads, mt_alg, 4000000);
-	vector<Sharing*> & sharings = party->GetSharings();
-	BooleanCircuit * bcirc = (BooleanCircuit*)sharings[S_BOOL]->GetCircuitBuildRoutine();
-
-	for(size_t i = 0; i < shr_dataset.size(); )
-}
-*/
 
 template<class T>
 void Party::erase(vector<T> v, size_t i)
