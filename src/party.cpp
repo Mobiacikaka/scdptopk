@@ -14,11 +14,26 @@
 #include <cryptopp/files.h>
 #include <cryptopp/filters.h>
 #include <cryptopp/hex.h>
-#include <boost/math/distributions/laplace.hpp>
 
 using namespace std;
 
-void Party::set_param(e_role role, std::string address, uint16_t port, seclvl seclevel, uint32_t bitlen, uint32_t nthreads, e_mt_gen_alg mt_alg)
+const size_t k = 4;
+const size_t prune_times = 5;
+#define MASK 0xFFFF
+
+void Party::set_param(
+	e_role role, 
+	std::string address, 
+	uint16_t port, 
+	seclvl seclevel, 
+	uint32_t bitlen, 
+	uint32_t nthreads, 
+	e_mt_gen_alg mt_alg,
+	size_t kbar,
+	double eps,
+	double p1,
+	double eps_em
+)
 {
 	this->role = role;
 	this->address = address;
@@ -27,6 +42,11 @@ void Party::set_param(e_role role, std::string address, uint16_t port, seclvl se
 	this->bitlen = bitlen;
 	this->nthreads = nthreads;
 	this->mt_alg = mt_alg;
+
+	this->kbar = kbar >= k ? kbar : k;
+	this->eps = eps;
+	this->p1 = p1;
+	this->eps_em = eps_em;
 }
 
 void Party::print_dataset(std::string filename)
@@ -60,13 +80,18 @@ void Party::Run()
 
 	this->Merge();
 	this->print_dataset("Merge.out");
+	clog << "Merge Finished" << endl;
 
-	this->Sort();
+	// this->Sort();
 	this->print_dataset("Sort.out");
-}
+	clog << "Sort Finished" << endl;
 
-const size_t k = 4;
-const size_t prune_times = 5;
+	vector<size_t> output;
+	output = this->Selection(k, kbar, eps, p1, eps_em, delta);
+	for(size_t i = 0; i < output.size(); i ++)
+		clog << output[i] << " ";
+	clog << endl;
+}
 
 void Party::Prune()
 {
@@ -186,7 +211,7 @@ int Party::MakeShareCli(CSocket * tsocket)
 		if(digest == decoded) break;
 	}
 	
-	int shr_rnd = rand();
+	int shr_rnd = rand() & MASK;
 	tsocket->Send((void *)&shr_rnd, sizeof(shr_rnd));
 
 	if(i < dataset.size())
@@ -246,6 +271,46 @@ void Party::Merge()
 	}
 
 	tsocket->Close();
+	this->delta = 1.0 / this->shr_dataset.size();
+}
+
+bool Party::compare(KV_type & kv1, KV_type & kv2)
+{
+	unique_ptr<CSocket> tsocket;
+	bool flag(false);
+	if(role == SERVER) {
+		tsocket = Listen(address, port);
+		if(!tsocket) {
+			cerr << "Listen Failed!" << endl;
+			exit(1);
+		}
+
+		int count1, count2;
+		tsocket->Receive((void *)&count1, sizeof(count1));
+		tsocket->Receive((void *)&count2, sizeof(count2));
+
+		flag = kv1.count - count1 > kv2.count - count2;
+		tsocket->Send((void *)&flag, sizeof(flag));
+	}
+	else {
+		tsocket = Connect(address, port);
+		if(!tsocket) {
+			cerr << "Connect Failed!" << endl;
+			exit(1);
+		}
+
+		int rnd = rand() & MASK;
+		int count1, count2;
+		count1 = kv1.count - rnd;
+		count2 = kv2.count - rnd;
+		tsocket->Send((void *)&count1, sizeof(count1));
+		tsocket->Send((void *)&count2, sizeof(count2));
+
+		tsocket->Receive((void *)&flag, sizeof(flag));
+	}
+	tsocket->Close();
+
+	return flag;
 }
 
 void Party::Sort()
@@ -255,59 +320,27 @@ void Party::Sort()
 		size_t j = i;
 		while(j > 0)
 		{
-			bool flag(false);
-			size_t i = j - 1;
-			clog << j << "\t" << i << endl;
-
-			{
-
-				ABYParty * party = new ABYParty(role, address, port, seclevel, bitlen, nthreads, mt_alg, 4000000);
-				vector<Sharing*> sharings = party->GetSharings();
-				BooleanCircuit * bcirc = (BooleanCircuit *) sharings[S_BOOL]->GetCircuitBuildRoutine();
-
-				share *srv_i, *cli_i, *srv_j, *cli_j;
-				if(role == SERVER)
-				{
-					srv_i = bcirc->PutINGate(static_cast<uint32_t>(shr_dataset[i].count), bitlen, role);
-					srv_j = bcirc->PutINGate(static_cast<uint32_t>(shr_dataset[j].count), bitlen, role);
-					cli_i = bcirc->PutDummyINGate(bitlen);
-					cli_j = bcirc->PutDummyINGate(bitlen);
-				}
-				else
-				{
-					srv_i = bcirc->PutDummyINGate(bitlen);
-					srv_j = bcirc->PutDummyINGate(bitlen);
-					cli_i = bcirc->PutINGate(static_cast<uint32_t>(shr_dataset[i].count), bitlen, role);
-					cli_j = bcirc->PutINGate(static_cast<uint32_t>(shr_dataset[j].count), bitlen, role);
-				}
-
-				share *cmb_i, *cmb_j, *shr_cmp, *shr_out;
-				cmb_i = bcirc->PutSUBGate(srv_i, cli_i);
-				cmb_j = bcirc->PutSUBGate(srv_j, cli_j);
-				shr_cmp = bcirc->PutGTGate(cmb_j, cmb_i);
-				shr_out = bcirc->PutOUTGate(shr_cmp, ALL);
-
-				party->ExecCircuit();
-
-				uint32_t output = shr_out->get_clear_value<uint32_t>();
-				flag = output;
-
-				delete party;
-				delete srv_i, cli_i, srv_j, cli_j;
-				delete cmb_i, cmb_j, shr_cmp, shr_out;
-			}
-
-			if(flag == true)
-			{
-				KV_type tmp = shr_dataset[i];
-				shr_dataset[i] = shr_dataset[j];
-				shr_dataset[j] = tmp;
+			if(compare(shr_dataset[j], shr_dataset[j-1])) {
+				KV_type tmp = shr_dataset[j];
+				shr_dataset[j] = shr_dataset[j-1];
+				shr_dataset[j-1] = tmp;
 			}
 			else break;
-
 			j --;
 		}
 	}
+}
+
+double Party::gen_laplace(double location, double scale)
+{
+	uniform_real_distribution<> values {-0.5, 0.5};
+	random_device rd;
+	default_random_engine rng {rd()};
+	double rnd = values(rng);
+	double res;
+
+	res = scale * ((rnd > 0) - (rnd < 0)) * log(1 - 2*abs(rnd));
+	return res;
 }
 
 double Party::get_delta_q(double delta, size_t kbar, double c)
@@ -337,7 +370,7 @@ double Party::get_T(double delta_q, double eps1, double eps2)
 			exit(1);
 		}
 
-		T = log( 1/delta_q ) / (eps2 / 2) + boost::math::laplace(0, 1/eps1).location();
+		T = log( 1/delta_q ) / (eps2 / 2) + gen_laplace(0, 1/eps1);
 		tsocket->Send((void *)&T, sizeof(T));
 		tsocket->Close();
 	}
@@ -402,7 +435,7 @@ double Party::get_qi(size_t i, double eps2)
 			exit(1);
 		}
 
-		qi_n = qi + boost::math::laplace(0, 1/(eps2/2)).location();
+		qi_n = qi + gen_laplace(0, 1/eps2);
 		tsocket->Send((void*)&qi_n, sizeof(qi_n));
 		tsocket->Close();
 	}
@@ -627,6 +660,8 @@ vector<size_t> Party::random_draw_output(double eps_em)
 	return output;
 }
 
+#include <iomanip>
+
 vector<size_t> Party::Selection(const size_t k, const size_t kbar, const double epsilon, const double p1, const double eps_em, const double delta)
 {
 	double eps1, eps2;
@@ -640,11 +675,21 @@ vector<size_t> Party::Selection(const size_t k, const size_t kbar, const double 
 	delta_q = get_delta_q(delta, kbar, c);
 	T = get_T(delta_q, eps1, eps2);
 
+	clog << "k   \t" << k << endl;
+	clog << "kbar\t" << kbar << endl;
+	clog << "eps \t" << epsilon << endl;
+	clog << "p1  \t" << p1 << endl;
+	clog << "epsem\t" << eps_em << endl;
+	clog << "delta\t" << fixed << setprecision(20) << delta << endl;
+	clog << "delta_q\t" << delta_q << endl;
+	clog << "thresh\t" << T << endl;
+	// exit(1);
+
 	vector<size_t> output; // set of indices
 	for(size_t i = kbar; i > 0; i --)
 	{
 		double qi_n = get_qi(i, eps2); // noisy qi
-		
+
 		if(qi_n > T)
 		{
 			if(i > k)

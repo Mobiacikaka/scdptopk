@@ -16,7 +16,11 @@ int32_t ReadTestOptions(
 	uint32_t* 		secparam, 
 	std::string* 	address,
 	uint16_t* 		port, 
-	int32_t* 		test_op
+	int32_t* 		test_op,
+	size_t*			kbar,
+	double*			eps,
+	double*			p1,
+	double*			eps_em
 ) 
 {
 	uint32_t int_role = 0, int_port = 0;
@@ -29,7 +33,11 @@ int32_t ReadTestOptions(
 		{ (void*) secparam, 	T_NUM, "s", "Symmetric Security Bits, default: 128", 					false, false }, 
 		{ (void*) address, 		T_STR, "a", "IP-address, default: localhost", 							false, false }, 
 		{ (void*) &int_port, 	T_NUM, "p", "Port, default: 7766", 										false, false }, 
-		{ (void*) test_op, 		T_NUM, "t", "Single test (leave out for all operations), default: off",	false, false } 
+		{ (void*) test_op, 		T_NUM, "t", "Single test (leave out for all operations), default: off",	false, false },
+		{ (void*) kbar, 		T_NUM, "kbar", "kbar",	false, false },
+		{ (void*) eps,	 		T_DOUBLE, "eps", "epsilon",	false, false },
+		{ (void*) p1,	 		T_DOUBLE, "p1", "p1 and p2",	false, false },
+		{ (void*) eps_em, 		T_DOUBLE, "epsem", "eps EM",	false, false }
 	};
 
 	if (!parse_options(argcp, argvp, options, sizeof(options) / sizeof(parsing_ctx))) {
@@ -58,13 +66,18 @@ int main(int argc, char** argv) {
     int32_t test_op = -1;
     e_mt_gen_alg mt_alg = MT_OT;
 
-    ReadTestOptions(&argc, &argv, &role, &bitlen, &nvals, &secparam, &address, &port, &test_op);
+	size_t kbar(0);
+	double eps(1.0);
+	double p1(0.37);
+	double eps_em(0);
+
+    ReadTestOptions(&argc, &argv, &role, &bitlen, &nvals, &secparam, &address, &port, &test_op, &kbar, &eps, &p1, &eps_em);
 
     seclvl seclevel = get_sec_lvl(secparam);
 
 	Party *party = new Party();
 
-	party->set_param(role, address, port, seclevel, bitlen, nthreads, mt_alg);
+	party->set_param(role, address, port, seclevel, bitlen, nthreads, mt_alg, kbar, eps, p1, eps_em);
 	party->Run();
 
 	delete party;

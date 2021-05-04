@@ -25,12 +25,21 @@ private:
 	};
 	std::string address;
 
+	size_t kbar;
+	double eps;
+	double p1;
+	double eps_em;
+	double delta;
+
 	int MakeShareSrv(KV_type & element, CSocket * tsocket);
 	int MakeShareCli(CSocket * tsocket);
+
+	bool compare(KV_type & kv1, KV_type & kv2);
 
 	double get_delta_q(double delta, size_t kbar, double c);
 	double get_T(double delta_q, double eps1, double eps2);
 	double get_qi(size_t i, double eps2);
+	double gen_laplace(double location, double scale);
 
 	template<class T>
 	void erase(std::vector<T> v, size_t i);
@@ -48,7 +57,11 @@ public:
 	Party() {}
 	~Party() {}
 
-	void set_param(e_role role, std::string address, uint16_t port, seclvl seclevel, uint32_t bitlen, uint32_t nthreads, e_mt_gen_alg mt_alg);
+	void set_param(e_role role, std::string address, 
+		uint16_t port, seclvl seclevel, uint32_t bitlen, 
+		uint32_t nthreads, e_mt_gen_alg mt_alg,
+		size_t kbar, double eps, double p1,
+		double eps_em);
 	void Run();
 
 };
