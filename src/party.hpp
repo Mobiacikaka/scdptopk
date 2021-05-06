@@ -35,6 +35,8 @@ private:
 	int MakeShareCli(CSocket * tsocket);
 
 	bool compare(KV_type & kv1, KV_type & kv2);
+	bool compare(KV_type & kv1, KV_type & kv2, int);
+	size_t partition(size_t left, size_t right);
 
 	double get_delta_q(double delta, size_t kbar, double c);
 	double get_T(double delta_q, double eps1, double eps2);

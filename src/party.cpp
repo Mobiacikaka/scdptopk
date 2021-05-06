@@ -82,15 +82,15 @@ void Party::Run()
 	this->print_dataset("Merge.out");
 	clog << "Merge Finished" << endl;
 
-	// this->Sort();
+	this->Sort();
 	this->print_dataset("Sort.out");
 	clog << "Sort Finished" << endl;
 
-	vector<size_t> output;
-	output = this->Selection(k, kbar, eps, p1, eps_em, delta);
-	for(size_t i = 0; i < output.size(); i ++)
-		clog << output[i] << " ";
-	clog << endl;
+	// vector<size_t> output;
+	// output = this->Selection(k, kbar, eps, p1, eps_em, delta);
+	// for(size_t i = 0; i < output.size(); i ++)
+	// 	clog << output[i] << " ";
+	// clog << endl;
 }
 
 void Party::Prune()
@@ -313,11 +313,92 @@ bool Party::compare(KV_type & kv1, KV_type & kv2)
 	return flag;
 }
 
+bool Party::compare(KV_type & kv1, KV_type & kv2, int)
+{
+	ABYParty * party = new ABYParty(role, address, port, seclevel, bitlen, nthreads, mt_alg);
+	vector<Sharing*> sharings = party->GetSharings();
+	BooleanCircuit * circ = (BooleanCircuit*) sharings[S_BOOL]->GetCircuitBuildRoutine();
+
+	share *srv1, *srv2, *cli1, *cli2;
+	if(role == SERVER) {
+		srv1 = circ->PutINGate(static_cast<uint32_t>(kv1.count), bitlen, role);
+		srv2 = circ->PutINGate(static_cast<uint32_t>(kv2.count), bitlen, role);
+		cli1 = circ->PutDummyINGate(bitlen);
+		cli2 = circ->PutDummyINGate(bitlen);
+	}
+	else {
+		srv1 = circ->PutDummyINGate(bitlen);
+		srv2 = circ->PutDummyINGate(bitlen);
+		cli1 = circ->PutINGate(static_cast<uint32_t>(kv1.count), bitlen, role);
+		cli2 = circ->PutINGate(static_cast<uint32_t>(kv2.count), bitlen, role);
+	}
+
+	share *cmb1, *cmb2, *shr_cmp, *shr_out;
+	cmb1 = circ->PutSUBGate(srv1, cli1);
+	cmb2 = circ->PutSUBGate(srv2, cli2);
+	shr_cmp = circ->PutGTGate(cmb1, cmb2);
+	shr_out = circ->PutOUTGate(shr_cmp, ALL);
+
+	party->ExecCircuit();
+
+	uint32_t output = shr_out->get_clear_value<uint32_t>();
+	assert(output == 0 || output == 1);
+
+	delete party;
+	delete srv1, srv2, cli1, cli2;
+	delete cmb1, cmb2, shr_cmp, shr_out;
+
+	return output;
+}
+
+#define compare(a, b) \
+	compare((a), (b))
+
+size_t Party::partition(size_t left, size_t right)
+{
+	size_t pivot(left);
+	assert(left < right);
+
+	left ++;
+	while(left < right) {
+		while(left < right && compare(shr_dataset[left], shr_dataset[pivot])) left ++;
+		while(left <= right && compare(shr_dataset[pivot], shr_dataset[right])) right --;
+
+		if(left >= right) {
+			break;
+		}
+
+		KV_type tmp = shr_dataset[left];
+		shr_dataset[left] = shr_dataset[right];
+		shr_dataset[right] = tmp;
+	}
+
+	KV_type tmp = shr_dataset[right];
+	shr_dataset[right] = shr_dataset[pivot];
+	shr_dataset[pivot] = tmp;
+
+	return right;
+}
+
 void Party::Sort()
 {
+	size_t left(0), right(shr_dataset.size()-1);
+	while(true)
+	{
+		size_t pivot = partition(left, right);
+		if(pivot == kbar) break;
+		if(pivot >  kbar) right = pivot-1;
+		else left = pivot+1;
+
+		clog << pivot << endl;
+	}
+
+	shr_dataset.erase(shr_dataset.begin()+kbar, shr_dataset.end());
+
 	for(size_t i = 1; i < shr_dataset.size(); i ++)
 	{
 		size_t j = i;
+		clog << j << endl;
 		while(j > 0)
 		{
 			if(compare(shr_dataset[j], shr_dataset[j-1])) {
@@ -660,8 +741,6 @@ vector<size_t> Party::random_draw_output(double eps_em)
 	return output;
 }
 
-#include <iomanip>
-
 vector<size_t> Party::Selection(const size_t k, const size_t kbar, const double epsilon, const double p1, const double eps_em, const double delta)
 {
 	double eps1, eps2;
@@ -680,7 +759,7 @@ vector<size_t> Party::Selection(const size_t k, const size_t kbar, const double 
 	clog << "eps \t" << epsilon << endl;
 	clog << "p1  \t" << p1 << endl;
 	clog << "epsem\t" << eps_em << endl;
-	clog << "delta\t" << fixed << setprecision(20) << delta << endl;
+	clog << "delta\t" << delta << endl;
 	clog << "delta_q\t" << delta_q << endl;
 	clog << "thresh\t" << T << endl;
 	// exit(1);
