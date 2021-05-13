@@ -72,6 +72,7 @@ void Party::Run()
 {
 	dataset.ReadDataset();
 	dataset.SortDataset();
+	dataset.print("Ready.out");
 
 	clog << "Ready for calculate" << endl;
 
@@ -107,13 +108,13 @@ void Party::Prune()
 
 		for(i = 0; i < prune_times; i ++)
 		{
-			blm = dataset.BloomPack(k * pow(2, i));
+			blm = dataset.BloomPack(kbar * pow(2, i));
 			tsocket->Send	((void *)blm, sizeof(struct bloom));
 			tsocket->Send((void *)blm->bf, blm->bytes);
 			tsocket->Receive((void *)(&nr_interset), sizeof(size_t));
 			bloom_free(blm);
 
-			if(nr_interset * 1.0 / k >= 0.9) break;
+			if(nr_interset * 1.0 / kbar >= 0.9) break;
 		}
 
 		tsocket->Close();
@@ -132,11 +133,11 @@ void Party::Prune()
 			tsocket->Receive((void *)blm, sizeof(struct bloom));
 			blm->bf = (unsigned char *)calloc(blm->bytes, sizeof(unsigned char));
 			tsocket->Receive((void *)blm->bf, blm->bytes);
-			nr_interset = dataset.BloomCheck(blm, k * pow(2, i));
+			nr_interset = dataset.BloomCheck(blm, kbar * pow(2, i));
 			tsocket->Send	((void *)(&nr_interset), sizeof(size_t));
 			bloom_free(blm);
 
-			if(nr_interset * 1.0 / k >= 0.9) break;
+			if(nr_interset * 1.0 / kbar >= 0.9) break;
 		}
 
 		tsocket->Close();
@@ -147,7 +148,10 @@ void Party::Prune()
 		exit(0);
 	}
 
-	dataset.Prune(k * pow(2, i-1));
+	if(i >= prune_times)
+		dataset.Prune((kbar + 1) * pow(2, i-1));
+	else
+		dataset.Prune((kbar + 1) * pow(2, i));
 }
 
 int Party::MakeShareSrv(KV_type & element, CSocket * tsocket)
@@ -208,7 +212,7 @@ int Party::MakeShareCli(CSocket * tsocket)
 		
 		if(digest == decoded) break;
 	}
-	
+
 	int shr_rnd = rand() & MASK;
 	tsocket->Send((void *)&shr_rnd, sizeof(shr_rnd));
 
@@ -253,7 +257,8 @@ void Party::Merge()
 			exit(1);
 		}
 
-		for(size_t i = 0; i < dataset.size(); i ++)
+		size_t len = dataset.size();
+		for(size_t i = 0; i < len; i ++)
 		{
 			KV_type tmp_kv("", MakeShareCli(tsocket.get()));
 			shr_dataset.push_back(tmp_kv);
@@ -748,7 +753,8 @@ void Party::RandomSelection()
 			exit(1);
 		}
 
-		for(size_t i = 0; i < shr_dataset.size(); i ++) {
+		size_t len(shr_dataset.size());
+		for(size_t i = 0; i < len; i ++) {
 			uint32_t rnd1 = rand();
 			uint32_t rnd2;
 			tsocket->Send((void *)&rnd1, sizeof(rnd1));
@@ -766,7 +772,8 @@ void Party::RandomSelection()
 			exit(1);
 		}
 
-		for(size_t i = 0; i < shr_dataset.size(); i ++) {
+		size_t len(shr_dataset.size());
+		for(size_t i = 0; i < len; i ++) {
 			uint32_t rnd1;
 			uint32_t rnd2 = rand();
 			tsocket->Receive((void *)&rnd1, sizeof(rnd1));
@@ -809,6 +816,7 @@ void Party::Selection()
 	for(size_t i = kbar; i > 0; i --)
 	{
 		double qi_n = get_qi(i, eps2); // noisy qi
+		clog << qi_n << endl;
 
 		if(qi_n > T)
 		{
