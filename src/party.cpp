@@ -17,7 +17,6 @@
 
 using namespace std;
 
-const size_t k = 4;
 const size_t prune_times = 5;
 #define MASK 0xFFFF
 
@@ -29,6 +28,7 @@ void Party::set_param(
 	uint32_t bitlen, 
 	uint32_t nthreads, 
 	e_mt_gen_alg mt_alg,
+	size_t k,
 	size_t kbar,
 	double eps,
 	double p1,
@@ -43,6 +43,7 @@ void Party::set_param(
 	this->nthreads = nthreads;
 	this->mt_alg = mt_alg;
 
+	this->k = k;
 	this->kbar = kbar >= k ? kbar : k;
 	this->eps = eps;
 	this->p1 = p1;
@@ -86,11 +87,8 @@ void Party::Run()
 	this->print_dataset("Sort.out");
 	clog << "Sort Finished" << endl;
 
-	// vector<size_t> output;
-	// output = this->Selection(k, kbar, eps, p1, eps_em, delta);
-	// for(size_t i = 0; i < output.size(); i ++)
-	// 	clog << output[i] << " ";
-	// clog << endl;
+	this->Selection();
+	clog << "Selection Finished" << endl;
 }
 
 void Party::Prune()
@@ -352,7 +350,7 @@ bool Party::compare(KV_type & kv1, KV_type & kv2, int)
 }
 
 #define compare(a, b) \
-	compare((a), (b))
+	compare((a), (b), 0)
 
 size_t Party::partition(size_t left, size_t right)
 {
@@ -389,8 +387,6 @@ void Party::Sort()
 		if(pivot == kbar) break;
 		if(pivot >  kbar) right = pivot-1;
 		else left = pivot+1;
-
-		clog << pivot << endl;
 	}
 
 	shr_dataset.erase(shr_dataset.begin()+kbar, shr_dataset.end());
@@ -398,7 +394,6 @@ void Party::Sort()
 	for(size_t i = 1; i < shr_dataset.size(); i ++)
 	{
 		size_t j = i;
-		clog << j << endl;
 		while(j > 0)
 		{
 			if(compare(shr_dataset[j], shr_dataset[j-1])) {
@@ -741,22 +736,69 @@ vector<size_t> Party::random_draw_output(double eps_em)
 	return output;
 }
 
-vector<size_t> Party::Selection(const size_t k, const size_t kbar, const double epsilon, const double p1, const double eps_em, const double delta)
+void Party::RandomSelection()
+{
+	unique_ptr<CSocket> tsocket;
+	ofstream out("Selection.out");
+
+	if(role == SERVER) {
+		tsocket = Listen(address, port);
+		if(!tsocket) {
+			cerr << "Listen Failed" << endl;
+			exit(1);
+		}
+
+		for(size_t i = 0; i < shr_dataset.size(); i ++) {
+			uint32_t rnd1 = rand();
+			uint32_t rnd2;
+			tsocket->Send((void *)&rnd1, sizeof(rnd1));
+			tsocket->Receive((void *)&rnd2, sizeof(rnd2));
+
+			size_t sel = (rnd1 + rnd2) % shr_dataset.size();
+			if(!shr_dataset[sel].ID.empty()) out << shr_dataset[sel].ID << endl;
+			shr_dataset.erase(shr_dataset.begin() + sel);
+		}
+	}
+	else {
+		tsocket = Connect(address, port);
+		if(!tsocket) {
+			cerr << "Connect Failed" << endl;
+			exit(1);
+		}
+
+		for(size_t i = 0; i < shr_dataset.size(); i ++) {
+			uint32_t rnd1;
+			uint32_t rnd2 = rand();
+			tsocket->Receive((void *)&rnd1, sizeof(rnd1));
+			tsocket->Send((void *)&rnd2, sizeof(rnd2));
+
+			size_t sel = (rnd1 + rnd2) % shr_dataset.size();
+			if(!shr_dataset[sel].ID.empty()) out << shr_dataset[sel].ID << endl;
+			shr_dataset.erase(shr_dataset.begin() + sel);
+		}
+	}
+	
+	out.close();
+	tsocket->Close();
+}
+
+// vector<size_t> Party::Selection(const size_t k, const size_t kbar, const double epsilon, const double p1, const double eps_em, const double delta)
+void Party::Selection()
 {
 	double eps1, eps2;
 	double c;
 	double delta_q;
 	double T; // threshold
 
-	eps1 = p1 * epsilon;
-	eps2 = epsilon - eps1;
+	eps1 = p1 * eps;
+	eps2 = eps - eps1;
 	c = 2 * eps1 / eps2 ;
 	delta_q = get_delta_q(delta, kbar, c);
 	T = get_T(delta_q, eps1, eps2);
 
 	clog << "k   \t" << k << endl;
 	clog << "kbar\t" << kbar << endl;
-	clog << "eps \t" << epsilon << endl;
+	clog << "eps \t" << eps << endl;
 	clog << "p1  \t" << p1 << endl;
 	clog << "epsem\t" << eps_em << endl;
 	clog << "delta\t" << delta << endl;
@@ -764,7 +806,6 @@ vector<size_t> Party::Selection(const size_t k, const size_t kbar, const double 
 	clog << "thresh\t" << T << endl;
 	// exit(1);
 
-	vector<size_t> output; // set of indices
 	for(size_t i = kbar; i > 0; i --)
 	{
 		double qi_n = get_qi(i, eps2); // noisy qi
@@ -772,18 +813,9 @@ vector<size_t> Party::Selection(const size_t k, const size_t kbar, const double 
 		if(qi_n > T)
 		{
 			if(i > k)
-			{
 				shr_dataset.erase(shr_dataset.begin()+i, shr_dataset.end());
-				return random_draw_output(eps_em);
-			}
-			else
-			{
-				output.resize(i);
-				for(size_t j = 0; j < i; j ++) output[j] = j;
-				return output;
-			}
+			RandomSelection();
+			return;
 		}
 	}
-
-	return output;
 }

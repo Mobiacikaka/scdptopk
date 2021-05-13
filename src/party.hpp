@@ -25,6 +25,7 @@ private:
 	};
 	std::string address;
 
+	size_t k;
 	size_t kbar;
 	double eps;
 	double p1;
@@ -48,12 +49,14 @@ private:
 	double generate_R(double mass);
 	uint64_t RandomDraw(double mass);
 	std::vector<size_t> random_draw_output(double eps_em);
+	void RandomSelection();
 
 protected:
 	void Prune();
 	void Merge();
 	void Sort();
-	std::vector<size_t> Selection( const size_t k, const size_t kbar, const double epsilon, const double p1, const double eps_em, const double delta);
+	// std::vector<size_t> Selection( const size_t k, const size_t kbar, const double epsilon, const double p1, const double eps_em, const double delta);
+	void Selection();
 
 public:
 	Party() {}
@@ -62,7 +65,7 @@ public:
 	void set_param(e_role role, std::string address, 
 		uint16_t port, seclvl seclevel, uint32_t bitlen, 
 		uint32_t nthreads, e_mt_gen_alg mt_alg,
-		size_t kbar, double eps, double p1,
+		size_t k, size_t kbar, double eps, double p1,
 		double eps_em);
 	void Run();
 

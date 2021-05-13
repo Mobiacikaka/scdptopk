@@ -17,6 +17,7 @@ int32_t ReadTestOptions(
 	std::string* 	address,
 	uint16_t* 		port, 
 	int32_t* 		test_op,
+	size_t*			k,
 	size_t*			kbar,
 	double*			eps,
 	double*			p1,
@@ -34,6 +35,7 @@ int32_t ReadTestOptions(
 		{ (void*) address, 		T_STR, "a", "IP-address, default: localhost", 							false, false }, 
 		{ (void*) &int_port, 	T_NUM, "p", "Port, default: 7766", 										false, false }, 
 		{ (void*) test_op, 		T_NUM, "t", "Single test (leave out for all operations), default: off",	false, false },
+		{ (void*) k,	 		T_NUM, "k", "k",	false, false },
 		{ (void*) kbar, 		T_NUM, "kbar", "kbar",	false, false },
 		{ (void*) eps,	 		T_DOUBLE, "eps", "epsilon",	false, false },
 		{ (void*) p1,	 		T_DOUBLE, "p1", "p1 and p2",	false, false },
@@ -66,18 +68,19 @@ int main(int argc, char** argv) {
     int32_t test_op = -1;
     e_mt_gen_alg mt_alg = MT_OT;
 
+	size_t k(4);
 	size_t kbar(0);
 	double eps(1.0);
 	double p1(0.37);
 	double eps_em(0);
 
-    ReadTestOptions(&argc, &argv, &role, &bitlen, &nvals, &secparam, &address, &port, &test_op, &kbar, &eps, &p1, &eps_em);
+    ReadTestOptions(&argc, &argv, &role, &bitlen, &nvals, &secparam, &address, &port, &test_op, &k, &kbar, &eps, &p1, &eps_em);
 
     seclvl seclevel = get_sec_lvl(secparam);
 
 	Party *party = new Party();
 
-	party->set_param(role, address, port, seclevel, bitlen, nthreads, mt_alg, kbar, eps, p1, eps_em);
+	party->set_param(role, address, port, seclevel, bitlen, nthreads, mt_alg, k, kbar, eps, p1, eps_em);
 	party->Run();
 
 	delete party;
