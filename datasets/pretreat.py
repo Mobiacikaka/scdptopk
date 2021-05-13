@@ -1,25 +1,37 @@
+# %%
 import pandas as pd
+import numpy as np
 
-df1 = pd.read_csv(open('dataset_TSMC2014_NYC.txt'), sep='\t', header=None,encoding = "ISO-8859-1")
-df2 = pd.read_csv(open('dataset_TSMC2014_TKY.txt'), sep='\t', header=None,encoding = "ISO-8859-1")
+# %%
+def random_output(filename, mode):
+	df = pd.read_csv(open(filename), sep='\t', header=None,encoding = "ISO-8859-1")
+	df.columns = ['userid','venid','vencatid','venname','lat','long','tz','time']
+	df.drop_duplicates(inplace=True)
+	srv = open("server.txt", mode)
+	cli = open("client.txt", mode)
+	for i in df.iterrows():
+		if np.random.randint(0, 10) % 2 == 0:
+			srv.write(str(i[1]['userid']) + "\t" + i[1]['venid'] + "\n")
+		else:
+			cli.write(str(i[1]['userid']) + "\t" + i[1]['venid'] + "\n")
+	srv.close()
+	cli.close()
 
-df1.columns = ['userid','venid','vencatid','venname','lat','long','tz','time']
-df1 = df1.drop(['vencatid','venname','lat','long','tz','time'], axis=1)
-df1['val'] = 1
-df1.drop_duplicates(inplace=True)
+random_output('dataset_TSMC2014_NYC.txt', 'w')
+random_output('dataset_TSMC2014_TKY.txt', 'a')
 
-df2.columns = ['userid','venid','vencatid','venname','lat','long','tz','time']
-df2 = df2.drop(['vencatid','venname','lat','long','tz','time'], axis=1)
-df2['val'] = 1
-df2.drop_duplicates(inplace=True)
+# %%
+def combine(filename):
+	df = pd.read_csv(open(filename), sep="\t", header=None, encoding="ISO-8859-1")
+	df.columns = ['userid','venid']
+	df['val'] = 1
+	df.drop_duplicates(inplace=True)
+	df = df.groupby(['venid'], as_index=False)['val'].sum()
+	with open(filename, "w") as f:
+		for i in df.iterrows():
+			f.write(i[1]['venid'] + "\t" + str(i[1]['val']) + "\n")
 
-df1 = df1.groupby(['venid'], as_index=False)['val'].sum()
-df2 = df2.groupby(['venid'], as_index=False)['val'].sum()
+combine('server.txt')
+combine('client.txt')
 
-with open("../test/server/dataset.txt", 'w') as f:
-	for i in range(int(df1.size/3)):
-		f.write(str(df1['venid'][i])+"\t"+str(df1['val'][i])+"\n")
-
-with open("../test/client/dataset.txt", 'w') as f:
-	for i in range(int(df2.size/3)):
-		f.write(str(df2['venid'][i])+"\t"+str(df2['val'][i])+"\n")
+# %%
