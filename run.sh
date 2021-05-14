@@ -34,38 +34,15 @@ cp "../datasets/server.txt" "server/dataset.txt"
 cp "../datasets/client.txt" "client/dataset.txt"
 cp "../build/scdptopk" "server/"
 cp "../build/scdptopk" "client/"
-k=2
 
-until [ ! $k -lt 11 ]
+k=2
+maxk=50
+trials=100
+
+until [ ! $k -lt $maxk ]
 do
+	echo
 	echo k=$k
-	run $k 2
+	run $k $trials
 	k=`expr $k + 1`
 done
-
-# rm exp -rf
-# mkdir exp
-# cd exp
-# mkdir server
-# mkdir client
-# cd ..
-
-# cp datasets/server.txt exp/server/dataset.txt
-# cp datasets/client.txt exp/client/dataset.txt
-# cp scdptopk exp/server/
-# cp scdptopk exp/client/
-
-# cd exp
-
-# cd server 
-# ./scdptopk -r 0 -k 4 &
-# cd ..
-# sleep 0.2
-# cd client 
-# time ./scdptopk -r 1 -k 4
-
-# cd ..
-# cat server/Selection.out > output
-# cat client/Selection.out >> output
-
-

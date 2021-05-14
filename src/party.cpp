@@ -72,24 +72,25 @@ void Party::Run()
 {
 	dataset.ReadDataset();
 	dataset.SortDataset();
+	this->delta = 1.0 / this->dataset.size();
 	dataset.print("Ready.out");
 
-	clog << "Ready for calculate" << endl;
+	// clog << "Ready for calculate" << endl;
 
 	this->Prune();
 	dataset.print("Prune.out");
-	clog << "Prune Finished" << endl;
+	// clog << "Prune Finished" << endl;
 
 	this->Merge();
 	this->print_dataset("Merge.out");
-	clog << "Merge Finished" << endl;
+	// clog << "Merge Finished" << endl;
 
 	this->Sort();
 	this->print_dataset("Sort.out");
-	clog << "Sort Finished" << endl;
+	// clog << "Sort Finished" << endl;
 
 	this->Selection();
-	clog << "Selection Finished" << endl;
+	// clog << "Selection Finished" << endl;
 }
 
 void Party::Prune()
@@ -274,7 +275,6 @@ void Party::Merge()
 	}
 
 	tsocket->Close();
-	this->delta = 1.0 / this->shr_dataset.size();
 }
 
 bool Party::compare(KV_type & kv1, KV_type & kv2)
@@ -386,13 +386,12 @@ size_t Party::partition(size_t left, size_t right)
 void Party::Sort()
 {
 	size_t left(0), right(shr_dataset.size()-1);
-	while(true)
+	while(left < right)
 	{
 		size_t pivot = partition(left, right);
 		if(pivot == kbar) break;
 		if(pivot >  kbar) right = pivot-1;
 		else left = pivot+1;
-		if(left > right) break;
 	}
 
 	shr_dataset.erase(shr_dataset.begin()+kbar, shr_dataset.end());
@@ -804,20 +803,18 @@ void Party::Selection()
 	delta_q = get_delta_q(delta, kbar, c);
 	T = get_T(delta_q, eps1, eps2);
 
-	clog << "k   \t" << k << endl;
-	clog << "kbar\t" << kbar << endl;
-	clog << "eps \t" << eps << endl;
-	clog << "p1  \t" << p1 << endl;
-	clog << "epsem\t" << eps_em << endl;
-	clog << "delta\t" << delta << endl;
-	clog << "delta_q\t" << delta_q << endl;
-	clog << "thresh\t" << T << endl;
-	// exit(1);
+	// clog << "k   \t" << k << endl;
+	// clog << "kbar\t" << kbar << endl;
+	// clog << "eps \t" << eps << endl;
+	// clog << "p1  \t" << p1 << endl;
+	// clog << "epsem\t" << eps_em << endl;
+	// clog << "delta\t" << delta << endl;
+	// clog << "delta_q\t" << delta_q << endl;
+	// clog << "thresh\t" << T << endl;
 
 	for(size_t i = kbar; i > 0; i --)
 	{
 		double qi_n = get_qi(i, eps2); // noisy qi
-		clog << qi_n << endl;
 
 		if(qi_n > T)
 		{
@@ -827,4 +824,7 @@ void Party::Selection()
 			return;
 		}
 	}
+
+	clog << "There is no output!" << endl;
+	assert(0);
 }
