@@ -149,9 +149,9 @@ void Party::Prune()
 	}
 
 	if(i >= prune_times)
-		dataset.Prune((kbar + 1) * pow(2, i-1));
+		dataset.Prune(kbar * pow(2, i-1));
 	else
-		dataset.Prune((kbar + 1) * pow(2, i));
+		dataset.Prune(kbar * pow(2, i));
 }
 
 int Party::MakeShareSrv(KV_type & element, CSocket * tsocket)
@@ -218,7 +218,7 @@ int Party::MakeShareCli(CSocket * tsocket)
 
 	if(i < dataset.size())
 	{
-		shr_rnd += dataset[i].count;
+		shr_rnd -= dataset[i].count;
 		dataset.erase(i);
 	}
 
@@ -392,6 +392,7 @@ void Party::Sort()
 		if(pivot == kbar) break;
 		if(pivot >  kbar) right = pivot-1;
 		else left = pivot+1;
+		if(left > right) break;
 	}
 
 	shr_dataset.erase(shr_dataset.begin()+kbar, shr_dataset.end());
