@@ -98,6 +98,7 @@ void Party::Prune()
 	size_t i;
 	struct bloom * blm;
 	unique_ptr<CSocket> tsocket;
+	size_t nr_interset;
 
 	if(role == SERVER)
 	{
@@ -150,9 +151,9 @@ void Party::Prune()
 	}
 
 	if(i >= prune_times)
-		dataset.Prune(kbar * pow(2, i-1));
+		dataset.Prune(kbar * pow(2, i-1) + 1);
 	else
-		dataset.Prune(kbar * pow(2, i));
+		dataset.Prune(kbar * pow(2, i) + 1);
 }
 
 int Party::MakeShareSrv(KV_type & element, CSocket * tsocket)
@@ -244,7 +245,9 @@ void Party::Merge()
 			shr_dataset.push_back(tmp_kv);
 		}
 
-		for(size_t i = 0; i < dataset.size() - nr_interset; i ++) {
+		size_t left;
+		tsocket->Receive((void *)&left, sizeof(left));
+		for(size_t i = 0; i < left; i ++) {
 			int rnd;
 			tsocket->Receive((void *)&rnd, sizeof(rnd));
 			KV_type tmp_kv("", rnd);
@@ -265,6 +268,8 @@ void Party::Merge()
 			shr_dataset.push_back(tmp_kv);
 		}
 
+		size_t left = dataset.size();
+		tsocket->Send((void *)&left, sizeof(left));
 		for(size_t i = 0; i < dataset.size(); i ++)
 		{
 			int rnd = rand();
@@ -812,9 +817,10 @@ void Party::Selection()
 	// clog << "delta_q\t" << delta_q << endl;
 	// clog << "thresh\t" << T << endl;
 
+	double qi_n;
 	for(size_t i = kbar; i > 0; i --)
 	{
-		double qi_n = get_qi(i, eps2); // noisy qi
+		qi_n = get_qi(i, eps2); // noisy qi
 
 		if(qi_n > T)
 		{
@@ -823,6 +829,13 @@ void Party::Selection()
 			RandomSelection();
 			return;
 		}
+	}
+
+	if(role == SERVER) {
+		// clog << "nr_interset: " << nr_interset << endl;
+		clog << "delta: " << delta << endl;
+		clog << "qi_n: " << qi_n << endl;
+		clog << "T: " << T << endl;
 	}
 
 	clog << "There is no output!" << endl;

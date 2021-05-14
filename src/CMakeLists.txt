@@ -21,4 +21,5 @@ target_link_libraries(
 	gmp
 	gmpxx
 	boost_system
+	stdc++fs
 )
