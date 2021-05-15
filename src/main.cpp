@@ -80,6 +80,8 @@ int main(int argc, char** argv) {
 
 	Party *party = new Party();
 
+	srand(time(NULL));
+
 	party->set_param(role, address, port, seclevel, bitlen, nthreads, mt_alg, k, kbar, eps, p1, eps_em);
 	party->Run();
 

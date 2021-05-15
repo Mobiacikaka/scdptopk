@@ -11,6 +11,7 @@ run() {
 	nr_trials=0
 	until [ ! $nr_trials -lt $2 ]
 	do 
+		echo "\n$nr_trials"
 
 		cd server 
 		./scdptopk -r 0 -k $k &
@@ -35,14 +36,13 @@ cp "../datasets/client.txt" "client/dataset.txt"
 cp "../build/scdptopk" "server/"
 cp "../build/scdptopk" "client/"
 
-k=2
-maxk=50
-trials=100
+k=1
+maxk=101
+trials=20
 
 until [ ! $k -lt $maxk ]
 do
-	echo
-	echo k=$k
+	echo "\nk=$k"
 	run $k $trials
 	k=`expr $k + 1`
 done
