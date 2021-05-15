@@ -18,6 +18,7 @@
 using namespace std;
 
 const size_t prune_times = 5;
+const size_t nr_users = 2293;
 #define MASK 0xFFFF
 
 void Party::set_param(
@@ -72,7 +73,7 @@ void Party::Run()
 {
 	dataset.ReadDataset();
 	dataset.SortDataset();
-	this->delta = 1.0 / this->dataset.size();
+	this->delta = 1.0 / nr_users;
 	dataset.print("Ready.out");
 
 	// clog << "Ready for calculate" << endl;

@@ -2,8 +2,6 @@ if [ ! -f "build/scdptopk" ]; then
 	./build.sh
 fi
 
-set -e
-
 run() {
 	k=$1
 	mkdir "$k"
@@ -11,6 +9,8 @@ run() {
 	nr_trials=0
 	until [ ! $nr_trials -lt $2 ]
 	do 
+		echo "\n"
+		echo "$nr_trials"
 
 		cd server 
 		./scdptopk -r 0 -k $k &
@@ -22,7 +22,8 @@ run() {
 		cat server/Selection.out > "$k/$nr_trials.out"
 		cat client/Selection.out >> "$k/$nr_trials.out"
 
-		nr_trials=`expr $nr_trials + 1 `
+		nr_trials=`expr $nr_trials + 1`
+		rm server/*.out client/*.out -rf
 	done
 	
 	# cd ..
@@ -35,9 +36,9 @@ cp "../datasets/client.txt" "client/dataset.txt"
 cp "../build/scdptopk" "server/"
 cp "../build/scdptopk" "client/"
 
-k=2
-maxk=50
-trials=100
+k=1
+maxk=101
+trials=50
 
 until [ ! $k -lt $maxk ]
 do
