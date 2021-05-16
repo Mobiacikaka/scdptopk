@@ -2,8 +2,6 @@ if [ ! -f "build/scdptopk" ]; then
 	./build.sh
 fi
 
-set -e
-
 run() {
 	k=$1
 	mkdir "$k"
@@ -37,8 +35,8 @@ cp "../build/scdptopk" "server/"
 cp "../build/scdptopk" "client/"
 
 k=1
-maxk=101
-trials=20
+maxk=51
+trials=10
 
 until [ ! $k -lt $maxk ]
 do

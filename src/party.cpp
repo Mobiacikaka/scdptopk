@@ -825,8 +825,7 @@ void Party::Selection()
 
 		if(qi_n > T)
 		{
-			if(i > k)
-				shr_dataset.erase(shr_dataset.begin()+i, shr_dataset.end());
+			shr_dataset.erase(shr_dataset.begin()+i, shr_dataset.end());
 			RandomSelection();
 			return;
 		}
