@@ -360,6 +360,8 @@ size_t Party::partition(size_t left, size_t right)
 		KV_type tmp = shr_dataset[left];
 		shr_dataset[left] = shr_dataset[right];
 		shr_dataset[right] = tmp;
+		left ++;
+		right --;
 	}
 
 	KV_type tmp = shr_dataset[right];
@@ -375,8 +377,8 @@ void Party::Sort()
 	while(left < right)
 	{
 		size_t pivot = partition(left, right);
-		if(pivot == kbar) break;
-		if(pivot >  kbar) right = pivot-1;
+		if(pivot == kbar+1) break;
+		if(pivot >  kbar+1) right = pivot-1;
 		else left = pivot+1;
 	}
 
