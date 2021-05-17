@@ -3,6 +3,7 @@
 #include "party.hpp"
 
 #include <cassert>
+#include <algorithm>
 #include <random>
 #include <cmath>
 #include <iostream>
@@ -79,7 +80,7 @@ void Party::Run()
 	// clog << "Ready for calculate" << endl;
 
 	this->Prune();
-	dataset.print("Prune.out");
+	// dataset.print("Prune.out");
 	// clog << "Prune Finished" << endl;
 
 	this->Merge();
@@ -152,85 +153,69 @@ void Party::Prune()
 	}
 
 	if(i >= prune_times)
-		dataset.Prune(kbar * pow(2, i-1) + 1);
+		// dataset.Prune(kbar * pow(2, i-1) + 1);
+		prune_size = kbar * pow(2, i-1) + 1;
 	else
-		dataset.Prune(kbar * pow(2, i) + 1);
+		// dataset.Prune(kbar * pow(2, i) + 1);
+		prune_size = kbar * pow(2, i) + 1;
 }
 
-int Party::MakeShareSrv(KV_type & element, CSocket * tsocket)
+void Party::makeMD5set()
 {
 	using namespace CryptoPP;
-	
-	string digest;
-	int shr_rnd(0);
-	Weak1::MD5 hash;
+	for(size_t i = 0; i < dataset.size(); i ++) {
+		string ID = dataset[i].ID;
+		string digest;
+		Weak1::MD5 hash;
 
-	hash.Update((const byte *)element.ID.c_str(), element.ID.size());
-	digest.resize(hash.DigestSize());
-	hash.Final((byte *)&digest[0]);
+		hash.Update((const byte *)&ID[0], ID.size());
+		digest.resize(hash.DigestSize());
+		hash.Final((byte *)&digest[0]);
 
-	string encoded;
-	StringSource tmpssrc(digest, true, new HexEncoder(new StringSink(encoded)));
+		md5set.push_back(digest);
+	}
+}
 
-	tsocket->Send((void *)encoded.c_str(), encoded.size());
+int Party::MakeShareSrv(size_t & index, CSocket * tsocket)
+{
+	int shr_rnd;
+	string str = md5set[index];
+
+	tsocket->Send((void *)str.c_str(), str.size());
 	tsocket->Receive((void *)&shr_rnd, sizeof(shr_rnd));
 
-	return shr_rnd + element.count;
+	return role == SERVER ? shr_rnd + dataset[index].count : shr_rnd - dataset[index].count;
 }
 
 int Party::MakeShareCli(CSocket * tsocket)
 {
-	using namespace CryptoPP;
-
 	// Part 1: decode the message send from server
 	string encoded;
-	string decoded;
-
-	encoded.resize(32);
+	encoded.resize(16);
 	tsocket->Receive((void *)&encoded[0], encoded.size());
-	// clog << encoded << endl;
 
-	HexDecoder decoder;
-	decoder.Put((byte *)encoded.data(), encoded.size());
-	decoder.MessageEnd();
-	
-	word64 size = decoder.MaxRetrievable();
-	if(size && size <= SIZE_MAX)
-	{
-		decoded.resize(size);
-		decoder.Get((byte *)&decoded[0], decoded.size());
-	}
-	
 	// Part 2: check the local dataset and find the same one
-	size_t i;
-	for(i = 0; i < dataset.size(); i ++)
-	{
-		string ID = dataset[i].ID;
-		string digest;
-		Weak1::MD5 hash;
-		
-		hash.Update((const byte *)&ID[0], ID.size());
-		digest.resize(hash.DigestSize());
-		hash.Final((byte *)&digest[0]);
-		
-		if(digest == decoded) break;
-	}
+	auto i = find(md5set.begin(), md5set.end(), encoded);
+	size_t index = i - md5set.begin();
 
 	int shr_rnd = rand() & MASK;
 	tsocket->Send((void *)&shr_rnd, sizeof(shr_rnd));
+	int rtn = role == SERVER ? shr_rnd + dataset[index].count : shr_rnd - dataset[index].count;
 
-	if(i < dataset.size())
+	if(index < dataset.size())
 	{
-		shr_rnd -= dataset[i].count;
-		dataset.erase(i);
+		if(index < prune_size) prune_size --; 
+		dataset.erase(index);
+		md5set.erase(md5set.begin() + index);
 	}
 
-	return shr_rnd;
+	return rtn;
 }
 
 void Party::Merge()
 {
 	unique_ptr<CSocket> tsocket;
+	makeMD5set();
 
 	if(role == SERVER)
 	{
@@ -240,18 +225,16 @@ void Party::Merge()
 			exit(1);
 		}
 
-		for(size_t i = 0; i < dataset.size(); i ++)
+		for(size_t i = 0; i < prune_size; i ++)
 		{
-			KV_type tmp_kv(dataset[i].ID, MakeShareSrv(dataset[i], tsocket.get()));
+			KV_type tmp_kv(dataset[i].ID, MakeShareSrv(i, tsocket.get()));
 			shr_dataset.push_back(tmp_kv);
 		}
 
 		size_t left;
 		tsocket->Receive((void *)&left, sizeof(left));
 		for(size_t i = 0; i < left; i ++) {
-			int rnd;
-			tsocket->Receive((void *)&rnd, sizeof(rnd));
-			KV_type tmp_kv("", rnd);
+			KV_type tmp_kv("", MakeShareCli(tsocket.get()));
 			shr_dataset.push_back(tmp_kv);
 		}
 	}
@@ -262,20 +245,17 @@ void Party::Merge()
 			exit(1);
 		}
 
-		size_t len = dataset.size();
+		size_t len = prune_size;
 		for(size_t i = 0; i < len; i ++)
 		{
 			KV_type tmp_kv("", MakeShareCli(tsocket.get()));
 			shr_dataset.push_back(tmp_kv);
 		}
 
-		size_t left = dataset.size();
-		tsocket->Send((void *)&left, sizeof(left));
-		for(size_t i = 0; i < dataset.size(); i ++)
+		tsocket->Send((void *)&prune_size, sizeof(prune_size));
+		for(size_t i = 0; i < prune_size; i++)
 		{
-			int rnd = rand();
-			tsocket->Send((void *)&rnd, sizeof(rnd));
-			KV_type tmp_kv(dataset[i].ID, rnd-dataset[i].count);
+			KV_type tmp_kv(dataset[i].ID, MakeShareSrv(i, tsocket.get()));
 			shr_dataset.push_back(tmp_kv);
 		}
 	}
@@ -361,7 +341,7 @@ bool Party::compare(KV_type & kv1, KV_type & kv2, int)
 }
 
 #define compare(a, b) \
-	compare((a), (b), 0)
+	compare((a), (b))
 
 size_t Party::partition(size_t left, size_t right)
 {
@@ -400,7 +380,7 @@ void Party::Sort()
 		else left = pivot+1;
 	}
 
-	shr_dataset.erase(shr_dataset.begin()+kbar, shr_dataset.end());
+	shr_dataset.erase(shr_dataset.begin()+kbar+1, shr_dataset.end());
 
 	for(size_t i = 1; i < shr_dataset.size(); i ++)
 	{
@@ -511,7 +491,7 @@ double Party::get_qi(size_t i, double eps2)
 	delete srv_i, srv_j, cli_i, cli_j;
 	delete cmb_i, cmb_j, cmb_dif, shr_out;
 
-	double qi = output - 1;
+	double qi = max(output - 1, 0);
 	double qi_n;
 	if(role == SERVER)
 	{
@@ -819,13 +799,13 @@ void Party::Selection()
 	// clog << "thresh\t" << T << endl;
 
 	double qi_n;
-	for(size_t i = kbar; i > 0; i --)
+	for(size_t i = kbar - 1; i >= 0; i --)
 	{
 		qi_n = get_qi(i, eps2); // noisy qi
 
 		if(qi_n > T)
 		{
-			shr_dataset.erase(shr_dataset.begin()+i, shr_dataset.end());
+			shr_dataset.erase(shr_dataset.begin()+i+1, shr_dataset.end());
 			RandomSelection();
 			return;
 		}

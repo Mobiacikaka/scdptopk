@@ -31,7 +31,10 @@ private:
 	double eps_em;
 	double delta;
 
-	int MakeShareSrv(KV_type & element, CSocket * tsocket);
+	size_t prune_size;
+	std::vector<std::string> md5set;
+	void makeMD5set();
+	int MakeShareSrv(size_t & index, CSocket * tsocket);
 	int MakeShareCli(CSocket * tsocket);
 
 	bool compare(KV_type & kv1, KV_type & kv2);
