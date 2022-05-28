@@ -1,10 +1,6 @@
-if [ ! -f "build/scdptopk" ]; then
-	./build.sh
-fi
-
 run() {
 	k=$1
-	mkdir "$k"
+	mkdir "k=$k"
 
 	nr_trials=0
 	until [ ! $nr_trials -lt $2 ]
@@ -18,27 +14,21 @@ run() {
 		time ./scdptopk -r 1 -k $k
 
 		cd ..
-		cat server/Selection.out > "$k/$nr_trials.out"
-		cat client/Selection.out >> "$k/$nr_trials.out"
+		pwd
+		cat server/Runtime.out > "k=$k/$nr_trials.srv.out"
+		cat client/Runtime.out > "k=$k/$nr_trials.cli.out"
 
 		nr_trials=`expr $nr_trials + 1 `
 	done
-	
-	# cd ..
 }
 
-rm exp -rf && mkdir exp && cd exp
-mkdir server && mkdir client
-cp "../datasets/server.txt" "server/dataset.txt"
-cp "../datasets/client.txt" "client/dataset.txt"
-cp "../build/scdptopk" "server/"
-cp "../build/scdptopk" "client/"
+k_min=1
+k_max=51
+trials=5
 
-k=1
-maxk=51
-trials=10
+k=$k_min
 
-until [ ! $k -lt $maxk ]
+until [ ! $k -lt $k_max ]
 do
 	echo "\nk=$k"
 	run $k $trials

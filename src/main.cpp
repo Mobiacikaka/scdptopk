@@ -36,10 +36,10 @@ int32_t ReadTestOptions(
 		{ (void*) &int_port, 	T_NUM, "p", "Port, default: 7766", 										false, false }, 
 		{ (void*) test_op, 		T_NUM, "t", "Single test (leave out for all operations), default: off",	false, false },
 		{ (void*) k,	 		T_NUM, "k", "k",	false, false },
-		{ (void*) kbar, 		T_NUM, "kbar", "kbar",	false, false },
-		{ (void*) eps,	 		T_DOUBLE, "eps", "epsilon",	false, false },
-		{ (void*) p1,	 		T_DOUBLE, "p1", "p1 and p2",	false, false },
-		{ (void*) eps_em, 		T_DOUBLE, "epsem", "eps EM",	false, false }
+		{ (void*) kbar, 		T_NUM, "1", "kbar",	false, false },
+		{ (void*) eps,	 		T_DOUBLE, "2", "epsilon",	false, false },
+		{ (void*) p1,	 		T_DOUBLE, "3", "p1 and p2",	false, false },
+		{ (void*) eps_em, 		T_DOUBLE, "4", "eps EM",	false, false }
 	};
 
 	if (!parse_options(argcp, argvp, options, sizeof(options) / sizeof(parsing_ctx))) {

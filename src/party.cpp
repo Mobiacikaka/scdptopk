@@ -1,12 +1,14 @@
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
 
 #include "party.hpp"
+#include "MurmurHash3.h"
 
 #include <cassert>
 #include <algorithm>
 #include <random>
 #include <cmath>
 #include <iostream>
+#include <ctime>
 #include <ENCRYPTO_utils/socket.h>
 #include <ENCRYPTO_utils/connection.h>
 #include <abycore/circuit/booleancircuits.h>
@@ -15,12 +17,22 @@
 #include <cryptopp/files.h>
 #include <cryptopp/filters.h>
 #include <cryptopp/hex.h>
+#include <cryptopp/integer.h>
 
 using namespace std;
 
+const vector<int> H = {1,2,3,4,5};
+
+
 const size_t prune_times = 5;
-const size_t nr_users = 2293;
 #define MASK 0xFFFF
+
+/* #define COUNT_TIME */
+
+#ifdef COUNT_TIME
+#define WRITE_TIME_FMT(file, name)	\
+	(file) << (double)(name ## _end - name ## _start) / CLOCKS_PER_SEC << endl;
+#endif
 
 void Party::set_param(
 	e_role role, 
@@ -70,30 +82,286 @@ void Party::print_dataset(std::string filename)
 		file << shr_dataset[i].ID << "\t" << shr_dataset[i].count << endl;
 }
 
+double Party::get_delta(size_t nr_users)
+{
+	unique_ptr<CSocket> tsocket;
+	double delta;
+
+	if(role == SERVER) {
+		tsocket = Listen(address, port);
+		if(!tsocket) {
+			cerr << "Listen Failed!" << endl;
+			exit(1);
+		}
+
+		size_t nr_users_cli;
+		tsocket->Send((void *)&nr_users, sizeof(nr_users));
+		tsocket->Receive((void *)&nr_users_cli, sizeof(nr_users));
+		clog << nr_users << "\t" << nr_users_cli << endl;
+		delta = 2.0 / (nr_users + nr_users_cli);
+	}
+	else {
+		tsocket = Connect(address, port);
+		if(!tsocket) {
+			cerr << "Connect Failed!" << endl;
+			exit(1);
+		}
+
+		size_t nr_users_srv;
+		tsocket->Receive((void *)&nr_users_srv, sizeof(nr_users_srv));
+		tsocket->Send((void *)&nr_users, sizeof(nr_users));
+		clog << nr_users << "\t" << nr_users_srv << endl;
+		delta = 2.0 / (nr_users + nr_users_srv);
+	}
+
+	tsocket->Close();
+	return delta;
+}
+
 void Party::Run()
 {
+#ifdef COUNT_TIME
+	ofstream runtime("Runtime.out");
+	clock_t global_start = clock();
+#endif
+
 	dataset.ReadDataset();
 	dataset.SortDataset();
-	this->delta = 1.0 / nr_users;
+	delta = this->get_delta(dataset.nr_users);
+	clog << "delta: " << delta << endl;
 	dataset.print("Ready.out");
 
-	// clog << "Ready for calculate" << endl;
+	clog << "Ready for calculate" << endl;
 
+#ifdef COUNT_TIME
+	clock_t prune_start = clock();
+#endif
 	this->Prune();
-	// dataset.print("Prune.out");
-	// clog << "Prune Finished" << endl;
+#ifdef COUNT_TIME
+	clock_t prune_end = clock();
+#endif
+	dataset.print("Prune.out");
+	clog << "Prune Finished" << endl;
 
+#ifdef COUNT_TIME
+	clock_t merge_start = clock();
+#endif
 	this->Merge();
+#ifdef COUNT_TIME
+	clock_t merge_end = clock();
+#endif
 	this->print_dataset("Merge.out");
-	// clog << "Merge Finished" << endl;
+	clog << "Merge Finished" << endl;
 
+#ifdef COUNT_TIME
+	clock_t sort_start = clock();
+#endif
 	this->Sort();
+#ifdef COUNT_TIME
+	clock_t sort_end = clock();
+#endif
 	this->print_dataset("Sort.out");
-	// clog << "Sort Finished" << endl;
+	clog << "Sort Finished" << endl;
 
+#ifdef COUNT_TIME
+	clock_t selec_start = clock();
+#endif
 	this->Selection();
-	// clog << "Selection Finished" << endl;
+#ifdef COUNT_TIME
+	clock_t selec_end = clock();
+#endif
+	clog << "Selection Finished" << endl;
+
+#ifdef COUNT_TIME
+	clock_t global_end = clock();
+
+	// runtime << (double)(global_end - global_start) / CLOCKS_PER_SEC << endl;
+	WRITE_TIME_FMT(runtime, prune)
+	WRITE_TIME_FMT(runtime, merge)
+	WRITE_TIME_FMT(runtime, sort)
+	WRITE_TIME_FMT(runtime, selec)
+	WRITE_TIME_FMT(runtime, global)
+	runtime.close();
+#endif
 }
+
+
+struct Key Party::read_key() {
+	ifstream f("key.txt");
+	struct Key key;
+	f >> key.pub.n;
+	f >> key.pub.y;
+	f >> key.priv.p;
+	f >> key.priv.q;
+	f.close();
+	return key;
+}
+
+
+uint64_t integer_mulmod(uint64_t x, uint64_t y, uint64_t p) {
+	CryptoPP::Integer _x(x), _y(y), _p(p), res;
+	res = (_x * _y) % _p;
+	return res.ConvertToLong();
+}
+
+
+uint64_t Party::power(uint64_t x, uint64_t y, uint64_t p) {
+	uint64_t res = 1;
+	x %= p;
+
+	if(x == 0) return 0;
+
+	while(y > 0) {
+		if((y & 1) == 1)
+			res = integer_mulmod(res, x, p);
+		y = y >> 1;
+		x = integer_mulmod(x, x, p);
+	}
+
+	return res;
+}
+
+
+uint64_t Party::encrypt_bit(uint64_t bit, struct Key &key) {
+	uint64_t n(key.pub.n), y(key.pub.y);
+	uint64_t x = rand() % n;
+	if(bit) {
+		return (y * this->power(x, 2, n)) % n;
+		return integer_mulmod(y, this->power(x, 2, n), n);
+	}
+	return power(x, 2, n);
+}
+
+
+int64_t Party::jacobi(uint64_t a, uint64_t n) {
+	if(a == 0) return 0;
+	if(a == 1) return 1;
+
+	uint64_t e = 0;
+	uint64_t a1 = a;
+	while(a1 % 2 == 0)
+	{
+		e += 1;
+		a1 /= 2;
+	}
+	assert(pow(2, e) * a1 == a);
+
+	int64_t s = 0;
+	if(e % 2 == 0) s = 1;
+	else if(n % 8 == 1 || n % 8 == 7) s = 1;
+	else if(n % 8 == 3 || n % 8 == 5) s = -1;
+	
+	if(n % 4 == 3 && a1 % 4 == 3) s *= -1;
+
+	uint64_t n1 = n % a1;
+	if(a1 == 1) return s;
+	return s * jacobi(n1, a1);
+}
+
+
+uint64_t Party::decrypt_bit(uint64_t bitc, struct Key &key) {
+	uint64_t p(key.priv.p), q(key.priv.q);
+	assert(p && q);
+	int64_t e = jacobi(bitc, p);
+	clog << bitc << "\t" << p << " - " << e << endl;
+	if(e == 1) return 0;
+	return 1;
+}
+
+
+uint64_t Party::get_sizeof_interset_server(std::unique_ptr<CSocket> &tsocket, struct Key &key_A, size_t prune_size) {
+	prune_size = prune_size > dataset.size() ? dataset.size() : prune_size;
+
+	// step 1
+	clog << "step 1" << endl;
+	vector<uint32_t> blm = vector<uint32_t>(this->M, 1);
+	for(int i = 0; i < prune_size && i < dataset.size(); i ++) {
+		KV_type item(dataset[i]);
+		for(int j = 0; j < H.size(); j ++)
+		{
+			uint32_t hv;
+			MurmurHash3_x86_32(item.ID.c_str(), item.ID.size(), H[j], &hv);
+			hv %= M;
+			blm[hv] = 0;
+		}
+	}
+
+	for(int i = 0; i < M; i ++) {
+		uint64_t enc = this->encrypt_bit(blm[i], key_A);
+		tsocket->Send((void *)&enc, sizeof(enc));
+	}
+
+	// step 2
+	clog << "step 2" << endl;
+	vector<vector<uint64_t>> EB_list;
+	for(int i = 0; i < prune_size && i < dataset.size(); i ++)
+	{
+		vector<uint64_t> EB;
+		for(int j = 0; j < H.size(); j ++) 
+		{
+			uint64_t value;
+			tsocket->Receive((void *)&value, sizeof(value));
+			EB.push_back(value);
+		}
+		EB_list.push_back(EB);
+	}
+
+	// step 3
+	clog << "step 3" << endl;
+	int c(0);
+	for(int i = 0; i < EB_list.size(); i ++)
+	{
+		bool flag(true);
+		for(int j = 0; j < EB_list[i].size(); j ++)
+		{
+			uint64_t d = this->decrypt_bit(EB_list[i][j], key_A);
+			if(d != 0) flag = false;
+		}
+		clog << endl;
+		if(flag) c += 1;
+	}
+	tsocket->Send((void *)&c, sizeof(c));
+	return c;
+}
+
+
+uint64_t Party::get_sizeof_interset_client(std::unique_ptr<CSocket> &tsocket, struct Key &key_A, size_t prune_size) {
+	prune_size = prune_size > dataset.size() ? dataset.size() : prune_size;
+
+	// step 1
+	clog << "step 1" << endl;
+	vector<uint64_t> cblm;
+	for(int i = 0; i < M; i ++)
+	{
+		uint64_t cipher;
+		tsocket->Receive((void *)&cipher, sizeof(cipher));
+		cblm.push_back(cipher);
+	}
+
+	// step 2
+	clog << "step 2" << endl;
+	for(int i = 0; i < prune_size && i < dataset.size(); i ++) 
+	{
+		KV_type item(dataset[i]);
+		for(int j = 0; j < H.size(); j ++)
+		{
+			uint32_t hv(0);
+			MurmurHash3_x86_32(item.ID.c_str(), item.ID.size(), H[j], &hv);
+			hv %= M;
+			uint64_t bh = cblm[hv];
+			uint64_t qrm = this->encrypt_bit(0, key_A);
+			uint64_t value = integer_mulmod(bh, qrm, key_A.pub.n);
+			tsocket->Send((void *)&value, sizeof(value));
+		}
+	}
+
+	// step 3
+	clog << "step 3" << endl;
+	int c(0);
+	tsocket->Receive((void *)&c, sizeof(c));
+	return c;
+}
+
 
 void Party::Prune()
 {
@@ -101,6 +369,8 @@ void Party::Prune()
 	struct bloom * blm;
 	unique_ptr<CSocket> tsocket;
 	size_t nr_interset;
+
+	assert(this->role == SERVER || this->role == CLIENT);
 
 	if(role == SERVER)
 	{
@@ -110,20 +380,19 @@ void Party::Prune()
 			exit(1);
 		}
 
+		struct Key key_A = this->read_key();
+		tsocket->Send((void *)&(key_A.pub), sizeof(key_A.pub));
+
 		for(i = 0; i < prune_times; i ++)
 		{
-			blm = dataset.BloomPack(kbar * pow(2, i));
-			tsocket->Send	((void *)blm, sizeof(struct bloom));
-			tsocket->Send((void *)blm->bf, blm->bytes);
-			tsocket->Receive((void *)(&nr_interset), sizeof(size_t));
-			bloom_free(blm);
-
+			size_t prune_size = kbar * pow(2, i);
+			nr_interset = this->get_sizeof_interset_server(tsocket, key_A, prune_size);
 			if(nr_interset * 1.0 / kbar >= 0.9) break;
 		}
 
 		tsocket->Close();
 	}
-	else if(role == CLIENT)
+	else
 	{
 		tsocket = Connect(address, port);
 		if(!tsocket) {
@@ -131,33 +400,26 @@ void Party::Prune()
 			exit(1);
 		}
 
+		struct Key key_A;
+		tsocket->Receive((void *)&(key_A.pub), sizeof(key_A.pub));
+
 		for(i = 0; i < prune_times; i ++)
 		{
-			blm = new struct bloom;
-			tsocket->Receive((void *)blm, sizeof(struct bloom));
-			blm->bf = (unsigned char *)calloc(blm->bytes, sizeof(unsigned char));
-			tsocket->Receive((void *)blm->bf, blm->bytes);
-			nr_interset = dataset.BloomCheck(blm, kbar * pow(2, i));
-			tsocket->Send	((void *)(&nr_interset), sizeof(size_t));
-			bloom_free(blm);
-
+			size_t prune_size = kbar * pow(2, i);
+			nr_interset = this->get_sizeof_interset_client(tsocket, key_A, prune_size);
+			clog << nr_interset << endl;
 			if(nr_interset * 1.0 / kbar >= 0.9) break;
 		}
 
 		tsocket->Close();
 	}
-	else
-	{
-		cerr << "Wrong e_role!" << endl;
-		exit(0);
-	}
 
 	if(i >= prune_times)
-		// dataset.Prune(kbar * pow(2, i-1) + 1);
 		prune_size = kbar * pow(2, i-1) + 1;
 	else
-		// dataset.Prune(kbar * pow(2, i) + 1);
 		prune_size = kbar * pow(2, i) + 1;
+	if(prune_size > dataset.size())
+		prune_size = dataset.size();
 }
 
 void Party::makeMD5set()
@@ -168,9 +430,9 @@ void Party::makeMD5set()
 		string digest;
 		Weak1::MD5 hash;
 
-		hash.Update((const byte *)&ID[0], ID.size());
+		hash.Update((const CryptoPP::byte*)&ID[0], ID.size());
 		digest.resize(hash.DigestSize());
-		hash.Final((byte *)&digest[0]);
+		hash.Final((CryptoPP::byte*)&digest[0]);
 
 		md5set.push_back(digest);
 	}
@@ -343,61 +605,64 @@ bool Party::compare(KV_type & kv1, KV_type & kv2, int)
 #define compare(a, b) \
 	compare((a), (b))
 
-size_t Party::partition(size_t left, size_t right)
-{
-	size_t pivot(left);
-	assert(left < right);
-
-	left ++;
-	while(left < right) {
-		while(left < right && compare(shr_dataset[left], shr_dataset[pivot])) left ++;
-		while(left <= right && compare(shr_dataset[pivot], shr_dataset[right])) right --;
-
-		if(left >= right) {
-			break;
-		}
-
-		KV_type tmp = shr_dataset[left];
-		shr_dataset[left] = shr_dataset[right];
-		shr_dataset[right] = tmp;
-		left ++;
-		right --;
+#define EXCHANGE(a, b) \
+	{ \
+		KV_type tmp = (a); \
+		(a) = (b); \
+		(b) = tmp; \
 	}
-
-	KV_type tmp = shr_dataset[right];
-	shr_dataset[right] = shr_dataset[pivot];
-	shr_dataset[pivot] = tmp;
-
-	return right;
-}
 
 void Party::Sort()
 {
-	size_t left(0), right(shr_dataset.size()-1);
-	while(left < right)
-	{
-		size_t pivot = partition(left, right);
-		if(pivot == kbar+1) break;
-		if(pivot >  kbar+1) right = pivot-1;
-		else left = pivot+1;
-	}
+	const size_t len = shr_dataset.size();
+	const size_t kbar = this->kbar + 1;
 
-	shr_dataset.erase(shr_dataset.begin()+kbar+1, shr_dataset.end());
+	// Construct Heap
+	for(size_t i = len-1; i > 0; i --) {
+		size_t top = (i - 1) / 2;
+		if(compare(shr_dataset[i], shr_dataset[top])) {
+			EXCHANGE(shr_dataset[i], shr_dataset[top]);
+			top = i;
+			while(top < len/2) {
+				size_t left = 2 * top + 1;
+				size_t right = 2 * top + 2;
+				size_t exc;
+				if(right >= len) exc = left;
+				else if(compare(shr_dataset[left], shr_dataset[right])) exc = left;
+				else exc = right;
 
-	for(size_t i = 1; i < shr_dataset.size(); i ++)
-	{
-		size_t j = i;
-		while(j > 0)
-		{
-			if(compare(shr_dataset[j], shr_dataset[j-1])) {
-				KV_type tmp = shr_dataset[j];
-				shr_dataset[j] = shr_dataset[j-1];
-				shr_dataset[j-1] = tmp;
+				if(compare(shr_dataset[exc], shr_dataset[top]))
+					EXCHANGE(shr_dataset[top], shr_dataset[exc]);
+				
+				top = exc;
 			}
-			else break;
-			j --;
 		}
 	}
+
+	// Pop Heap
+	for(size_t i = 0; i < kbar; i ++) {
+		EXCHANGE(shr_dataset[0], shr_dataset[len-i-1]);
+
+		size_t top = 0;
+		while(top < (len-i-1)/2)
+		{
+			if(log2(top+1) >= kbar-i) break;
+			size_t left = 2 * top + 1;
+			size_t right = 2 * top + 2;
+			size_t exc;
+			if(right >= len - i - 1) exc = left;
+			else if(compare(shr_dataset[left], shr_dataset[right])) exc = left;
+			else exc = right;
+
+			if(compare(shr_dataset[exc], shr_dataset[top]))
+				EXCHANGE(shr_dataset[top], shr_dataset[exc]);
+
+			top = exc;
+		}
+	}
+
+	reverse(shr_dataset.begin(), shr_dataset.end());
+	shr_dataset.erase(shr_dataset.begin() + kbar, shr_dataset.end());
 }
 
 double Party::gen_laplace(double location, double scale)
@@ -461,7 +726,7 @@ double Party::get_qi(size_t i, double eps2)
 {
 	ABYParty * party = new ABYParty(role, address, port, seclevel, bitlen, nthreads, mt_alg, 4000000);
 	vector<Sharing*> sharings = party->GetSharings();
-	BooleanCircuit * bcirc = (BooleanCircuit *) sharings[S_YAO]->GetCircuitBuildRoutine();
+	BooleanCircuit * bcirc = (BooleanCircuit *) sharings[S_BOOL]->GetCircuitBuildRoutine();
 
 	share *srv_i, *cli_i, *srv_j, *cli_j;
 	if(role == SERVER)
@@ -798,10 +1063,10 @@ void Party::Selection()
 	// clog << "epsem\t" << eps_em << endl;
 	// clog << "delta\t" << delta << endl;
 	// clog << "delta_q\t" << delta_q << endl;
-	// clog << "thresh\t" << T << endl;
+	clog << "thresh\t" << T << endl;
 
 	double qi_n;
-	for(size_t i = kbar - 1; i >= 0; i --)
+	for(int i = kbar - 1; i >= 0; i --)
 	{
 		qi_n = get_qi(i, eps2); // noisy qi
 
@@ -821,5 +1086,6 @@ void Party::Selection()
 	}
 
 	clog << "There is no output!" << endl;
-	assert(0);
+	// assert(0);
+	return;
 }

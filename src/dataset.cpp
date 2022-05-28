@@ -14,6 +14,8 @@ void Dataset::ReadDataset()
 		exit(1);
 	} 
 
+	file >> nr_users;
+
 	string str;
 	int cnt;
 	while(file >> str)

@@ -5,6 +5,16 @@
 #include <abycore/aby/abyparty.h>
 #include <string>
 #include <vector>
+#include <cryptopp/integer.h>
+
+struct Key {
+	struct Pub {
+		uint64_t n, y;
+	} pub;
+	struct Priv {
+		uint64_t p, q;
+	} priv;
+};
 
 class Party
 {
@@ -39,8 +49,8 @@ private:
 
 	bool compare(KV_type & kv1, KV_type & kv2);
 	bool compare(KV_type & kv1, KV_type & kv2, int);
-	size_t partition(size_t left, size_t right);
 
+	double get_delta(size_t nr_users);
 	double get_delta_q(double delta, size_t kbar, double c);
 	double get_T(double delta_q, double eps1, double eps2);
 	double get_qi(size_t i, double eps2);
@@ -52,6 +62,15 @@ private:
 	uint64_t RandomDraw(double mass);
 	std::vector<size_t> random_draw_output(double eps_em);
 	void RandomSelection();
+
+	const int M = 1000;
+	struct Key read_key();
+	uint64_t encrypt_bit(uint64_t bit, struct Key &key);
+	uint64_t decrypt_bit(uint64_t bit, struct Key &key);
+	int64_t jacobi(uint64_t bitc, uint64_t p);
+	uint64_t power(uint64_t x, uint64_t y, uint64_t p);
+	uint64_t get_sizeof_interset_server(std::unique_ptr<CSocket> &, struct Key &, size_t);
+	uint64_t get_sizeof_interset_client(std::unique_ptr<CSocket> &, struct Key &, size_t);
 
 protected:
 	void Prune();

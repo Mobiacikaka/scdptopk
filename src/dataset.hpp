@@ -38,6 +38,11 @@ class Dataset
 private:
 	std::vector<KV_type> content;
 
+protected:
+	size_t nr_users;
+
+friend class Party;
+
 public:
 	Dataset() {}
 	~Dataset() {}
