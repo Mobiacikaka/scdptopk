@@ -263,7 +263,6 @@ uint64_t Party::decrypt_bit(uint64_t bitc, struct Key &key) {
 	uint64_t p(key.priv.p), q(key.priv.q);
 	assert(p && q);
 	int64_t e = jacobi(bitc, p);
-	clog << bitc << "\t" << p << " - " << e << endl;
 	if(e == 1) return 0;
 	return 1;
 }
@@ -273,7 +272,6 @@ uint64_t Party::get_sizeof_interset_server(std::unique_ptr<CSocket> &tsocket, st
 	prune_size = prune_size > dataset.size() ? dataset.size() : prune_size;
 
 	// step 1
-	clog << "step 1" << endl;
 	vector<uint32_t> blm = vector<uint32_t>(this->M, 1);
 	for(int i = 0; i < prune_size && i < dataset.size(); i ++) {
 		KV_type item(dataset[i]);
@@ -292,7 +290,6 @@ uint64_t Party::get_sizeof_interset_server(std::unique_ptr<CSocket> &tsocket, st
 	}
 
 	// step 2
-	clog << "step 2" << endl;
 	vector<vector<uint64_t>> EB_list;
 	for(int i = 0; i < prune_size && i < dataset.size(); i ++)
 	{
@@ -307,7 +304,6 @@ uint64_t Party::get_sizeof_interset_server(std::unique_ptr<CSocket> &tsocket, st
 	}
 
 	// step 3
-	clog << "step 3" << endl;
 	int c(0);
 	for(int i = 0; i < EB_list.size(); i ++)
 	{
@@ -317,7 +313,6 @@ uint64_t Party::get_sizeof_interset_server(std::unique_ptr<CSocket> &tsocket, st
 			uint64_t d = this->decrypt_bit(EB_list[i][j], key_A);
 			if(d != 0) flag = false;
 		}
-		clog << endl;
 		if(flag) c += 1;
 	}
 	tsocket->Send((void *)&c, sizeof(c));
@@ -329,7 +324,6 @@ uint64_t Party::get_sizeof_interset_client(std::unique_ptr<CSocket> &tsocket, st
 	prune_size = prune_size > dataset.size() ? dataset.size() : prune_size;
 
 	// step 1
-	clog << "step 1" << endl;
 	vector<uint64_t> cblm;
 	for(int i = 0; i < M; i ++)
 	{
@@ -339,7 +333,6 @@ uint64_t Party::get_sizeof_interset_client(std::unique_ptr<CSocket> &tsocket, st
 	}
 
 	// step 2
-	clog << "step 2" << endl;
 	for(int i = 0; i < prune_size && i < dataset.size(); i ++) 
 	{
 		KV_type item(dataset[i]);
@@ -356,7 +349,6 @@ uint64_t Party::get_sizeof_interset_client(std::unique_ptr<CSocket> &tsocket, st
 	}
 
 	// step 3
-	clog << "step 3" << endl;
 	int c(0);
 	tsocket->Receive((void *)&c, sizeof(c));
 	return c;
@@ -407,7 +399,6 @@ void Party::Prune()
 		{
 			size_t prune_size = kbar * pow(2, i);
 			nr_interset = this->get_sizeof_interset_client(tsocket, key_A, prune_size);
-			clog << nr_interset << endl;
 			if(nr_interset * 1.0 / kbar >= 0.9) break;
 		}
 
